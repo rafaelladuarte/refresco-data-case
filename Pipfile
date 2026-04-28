@@ -1,0 +1,20 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+apache-airflow = "*"
+pandas = "*"
+pyarrow = "*"
+sqlalchemy = "*"
+psycopg2-binary = "*"
+requests = "*"
+pytest = "*"
+python-dotenv = "*"
+s3fs = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.13"

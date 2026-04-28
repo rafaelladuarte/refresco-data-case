@@ -3,6 +3,7 @@ import os
 from datetime import datetime
 import logging
 from pathlib import Path
+import s3fs
 
 # Configuração de Logging
 logging.basicConfig(
@@ -12,9 +13,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configurações de Caminhos
-BASE_DIR = Path(__file__).parent.parent.parent
-RAW_DIR = BASE_DIR / "data" / "raw"
-BRONZE_DIR = BASE_DIR / "data" / "bronze"
+fs = s3fs.S3FileSystem(
+    key="minio",
+    secret="minio123",
+    client_kwargs={"endpoint_url": "http://localhost:9000"}
+)
 
 def get_ingestion_date():
     return datetime.now().strftime("%Y-%m-%dT%H:%M:%S")

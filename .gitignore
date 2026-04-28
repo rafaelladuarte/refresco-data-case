@@ -18,3 +18,5 @@ data/gold/
 # OS
 .DS_Store
 Thumbs.db
+
+logs/
