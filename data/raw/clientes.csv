@@ -1,0 +1,121 @@
+id_cliente,nome_cliente,cnpj,canal,regiao,cidade,uf,representante,ativo
+C0001,Distribuidora União,53.923.217/8673-19,Atacado,Triângulo Mineiro,Araguari,MG,Fernanda Souza,S
+C0002,Atacadão do Zé,60.114.370/9791-25,Food Service,Triângulo Mineiro,Uberlândia,MG,Juliana Costa,S
+C0003,Empório Santa Fé,57.210.791/4830-70,Atacado,Alto Paranaíba,Presidente Olegário,MG,Carlos Mendes,S
+C0004,Padaria da Praça,91.943.575/5951-93,Conveniência,Alto Paranaíba,Patos de Minas,MG,Juliana Costa,S
+C0005,Mercado do João,73.218.199/4846-78,Supermercado,Sul de Minas,Varginha,MG,Fernanda Souza,S
+C0006,Lanchonete da Praça,85.860.844/3531-63,Food Service,Noroeste de Minas,Bonfinópolis,MG,Tatiane Ferreira,S
+C0007,Empório Santa Fé,14.806.479/4559-66,Food Service,Sul de Minas,Varginha,MG,Juliana Costa,S
+C0008,Supermercado da Praça,79.760.467/1992-60,Atacado,Triângulo Mineiro,Araguari,MG,Paulo Rodrigues,S
+C0009,Distribuidora da Maria,92.754.711/1349-16,Varejo Tradicional,Triângulo Mineiro,Uberaba,MG,Paulo Rodrigues,S
+C0010,Empório Central,80.312.700/4538-39,Supermercado,Triângulo Mineiro,Uberlândia,MG,Paulo Rodrigues,S
+C0011,Mercado Popular,26.653.356/3858-24,Conveniência,Triângulo Mineiro,Uberaba,MG,Tatiane Ferreira,S
+C0012,Mercado do Zé,85.431.116/3854-43,Supermercado,Sul de Minas,Passos,MG,Carlos Mendes,S
+C0013,Atacadão da Maria,70.559.896/6931-75,Food Service,Triângulo Mineiro,Uberlândia,MG,Rafael Lima,S
+C0014,Atacadão Central,94.633.408/8504-92,Food Service,Sul de Minas,Poços de Caldas,MG,Carlos Mendes,S
+C0015,Conveniência Santa Fé,72.829.554/2204-20,Food Service,Sul de Minas,Poços de Caldas,MG,Paulo Rodrigues,S
+C0016,Bar Popular,58.711.643/5831-68,Varejo Tradicional,Triângulo Mineiro,Araguari,MG,Rafael Lima,S
+C0017,Supermercado Familiar,65.562.333/7779-53,Varejo Tradicional,Noroeste de Minas,Paracatu,MG,Juliana Costa,S
+C0018,Supermercado do Zé,50.781.361/7132-29,Food Service,Noroeste de Minas,Bonfinópolis,MG,Tatiane Ferreira,S
+C0019,Supermercado Familiar,21.542.198/7105-26,Varejo Tradicional,Noroeste de Minas,Unaí,MG,Rafael Lima,S
+C0020,Atacadão Vitória,95.225.520/6793-95,Conveniência,Sul de Minas,Varginha,MG,Juliana Costa,1
+C0021,Empório Popular,23.691.619/4485-29,Atacado,Sul de Minas,Varginha,MG,Tatiane Ferreira,S
+C0022,Supermercado do Zé,24.880.385/4705-64,Supermercado,Noroeste de Minas,João Pinheiro,MG,Rafael Lima,S
+C0023,Restaurante do João,44.819.880/6062-53,Conveniência,Sul de Minas,Passos,MG,Paulo Rodrigues,S
+C0024,Bar Brasil,18.245.858/1502-21,Supermercado,Sul de Minas,Pouso Alegre,MG,Tatiane Ferreira,S
+C0025,Conveniência Três Irmãos,30.478.419/6314-82,Food Service,Triângulo Mineiro,Araguari,MG,Rafael Lima,S
+C0026,Bar Bom Preço,96.183.378/8259-94,Varejo Tradicional,Sul de Minas,Poços de Caldas,MG,Juliana Costa,S
+C0027,Distribuidora Santa Fé,37.873.624/2864-54,Conveniência,Noroeste de Minas,João Pinheiro,MG,Juliana Costa,S
+C0028,Empório Três Irmãos,15.325.504/1897-10,Atacado,Sul de Minas,Varginha,MG,Fernanda Souza,S
+C0029,Bar União,47.435.222/1126-73,Supermercado,Alto Paranaíba,Patrocínio,MG,Tatiane Ferreira,S
+C0030,Bar Santa Fé,74.672.953/6802-19,Supermercado,Noroeste de Minas,Paracatu,MG,Juliana Costa,S
+C0031,Mercado Três Irmãos,50.689.539/7626-91,Food Service,Sul de Minas,Poços de Caldas,MG,Juliana Costa,S
+C0032,Conveniência do João,31.920.732/8538-98,Varejo Tradicional,Alto Paranaíba,Patrocínio,MG,Paulo Rodrigues,S
+C0033,Supermercado Central,85.510.636/2288-60,Food Service,Sul de Minas,Pouso Alegre,MG,Paulo Rodrigues,S
+C0034,Lanchonete União,19.622.748/2868-77,Supermercado,Alto Paranaíba,Patos de Minas,MG,Rafael Lima,S
+C0035,Lanchonete das Flores,40.205.249/5193-35,Atacado,Triângulo Mineiro,Uberaba,MG,Fernanda Souza,S
+C0036,Bar União,69.872.677/8354-97,Varejo Tradicional,Triângulo Mineiro,Patos de Minas,MG,Rafael Lima,S
+C0037,Bar Três Irmãos,70.552.746/5961-45,Atacado,Alto Paranaíba,Patos de Minas,MG,Rafael Lima,S
+C0038,Atacadão da Maria,69.562.138/1932-57,Atacado,Sul de Minas,Varginha,MG,Paulo Rodrigues,S
+C0039,Empório Brasil,69.694.667/1672-67,Varejo Tradicional,Sul de Minas,Pouso Alegre,MG,Rafael Lima,S
+C0040,Empório Três Irmãos,17.561.205/6626-20,Atacado,Triângulo Mineiro,Uberaba,MG,Rafael Lima,S
+C0041,Padaria das Flores,66.636.635/3600-56,Varejo Tradicional,Triângulo Mineiro,Patos de Minas,MG,Paulo Rodrigues,S
+C0042,Conveniência União,96.712.153/6482-18,Food Service,Alto Paranaíba,Patrocínio,MG,Paulo Rodrigues,S
+C0043,Conveniência Popular,94.717.994/3463-52,Conveniência,Sul de Minas,Varginha,MG,Carlos Mendes,S
+C0044,Restaurante da Praça,26.709.825/2388-49,Atacado,Triângulo Mineiro,Patos de Minas,MG,Rafael Lima,S
+C0045,Bar da Praça,92.786.533/9331-56,Atacado,Noroeste de Minas,Unaí,MG,Carlos Mendes,S
+C0046,Bar Central,72.296.331/3253-29,Atacado,Alto Paranaíba,Patrocínio,MG,Carlos Mendes,S
+C0047,Atacadão União,77.138.777/6517-89,Varejo Tradicional,Alto Paranaíba,Presidente Olegário,MG,Fernanda Souza,S
+C0048,Bar Bom Preço,66.144.520/6968-96,,Noroeste de Minas,Paracatu,MG,Tatiane Ferreira,S
+C0049,Empório Popular,39.646.344/6070-70,Food Service,Triângulo Mineiro,Patos de Minas,MG,Fernanda Souza,S
+C0050,Distribuidora Três Irmãos,58.614.640/7859-30,Conveniência,Alto Paranaíba,Patrocínio,MG,Fernanda Souza,S
+C0051,Mercado da Praça,57.667.205/9452-25,Atacado,Triângulo Mineiro,Patos de Minas,MG,Paulo Rodrigues,S
+C0052,Restaurante Três Irmãos,65.193.327/8391-54,Supermercado,Sul de Minas,Passos,MG,Carlos Mendes,S
+C0053,Conveniência Vitória,40.495.183/7142-38,Varejo Tradicional,Noroeste de Minas,João Pinheiro,MG,Carlos Mendes,S
+C0054,Lanchonete União,27.139.393/8740-99,,Alto Paranaíba,Patos de Minas,MG,Fernanda Souza,S
+C0055,Empório do João,12.362.320/3449-80,Food Service,Noroeste de Minas,Unaí,MG,Tatiane Ferreira,S
+C0056,Restaurante Central,25.148.344/7878-91,Varejo Tradicional,Noroeste de Minas,João Pinheiro,MG,Rafael Lima,S
+C0057,Supermercado Familiar,86.648.116/9443-83,Varejo Tradicional,Noroeste de Minas,Bonfinópolis,MG,Fernanda Souza,S
+C0058,Conveniência do João,40.684.526/4068-95,Atacado,Triângulo Mineiro,Araguari,MG,Tatiane Ferreira,S
+C0059,Lanchonete da Maria,59.994.581/1713-91,Conveniência,Sul de Minas,Poços de Caldas,MG,Juliana Costa, S
+C0060,Mercado do Zé,54.346.850/2698-84,Atacado,Alto Paranaíba,Patos de Minas,MG,Tatiane Ferreira,S
+C0061,Mercado do ZÃ©,53.933.758/3868-97,Supermercado,Alto Paranaíba,Presidente Olegário,MG,Juliana Costa,S
+C0062,Bar da Maria,14.400.306/1717-35,Supermercado,Noroeste de Minas,Bonfinópolis,MG,Carlos Mendes,Sim
+C0063,Atacadão Santa Fé,70.359.137/4131-46,Atacado,Alto Paranaíba,Presidente Olegário,MG,Paulo Rodrigues,S
+C0064,Restaurante da Maria,65.509.861/8204-59,Atacado,Sul de Minas,Varginha,MG,Paulo Rodrigues,S
+C0065,Distribuidora do Zé,20.844.534/2293-65,Food Service,Triângulo Mineiro,Araguari,MG,Rafael Lima,S
+C0066,Restaurante do Zé,20.435.776/5843-49,Conveniência,Triângulo Mineiro,Uberlândia,MG,Juliana Costa,S
+C0067,Distribuidora do Zé,15.844.990/6776-88,Supermercado,Noroeste de Minas,Bonfinópolis,MG,Juliana Costa,S
+C0068,Supermercado da Praça,61.472.625/3621-13,Varejo Tradicional,Alto Paranaíba,Presidente Olegário,MG,Fernanda Souza,S
+C0069,Bar da Maria,92.475.470/7272-82,Varejo Tradicional,Noroeste de Minas,Paracatu,MG,Carlos Mendes,S
+C0070,Lanchonete do Zé,19.687.240/9674-56,Food Service,Triângulo Mineiro,Patos de Minas,MG,Juliana Costa,S
+C0071,Padaria da Maria CÃ£o,33.611.630/7340-81,Atacado,Alto Paranaíba,Patos de Minas,MG,Carlos Mendes,S
+C0072,Distribuidora Central,46.810.602/4279-25,Atacado,Alto Paranaíba,Presidente Olegário,MG,Fernanda Souza,S
+C0073,Bar Express,21.929.798/6236-95,Food Service,Sul de Minas,Pouso Alegre,MG,Paulo Rodrigues,S
+C0074,Atacadão Popular,30.828.826/3852-56,Conveniência,Sul de Minas,Varginha,MG,Rafael Lima,S
+C0075,Padaria União,40.909.605/1430-56,Varejo Tradicional,Triângulo Mineiro,Uberaba,MG,Rafael Lima,S
+C0076,Atacadão Bom Preço,21.167.416/7523-71,Food Service,Alto Paranaíba,Presidente Olegário,MG,Rafael Lima,S
+C0077,Empório da Maria,50.757.175/8372-69,Food Service,Noroeste de Minas,Paracatu,MG,Tatiane Ferreira,S
+C0078,Atacadão da Praça,33.886.232/8088-74,Supermercado,Alto Paranaíba,Presidente Olegário,MG,Carlos Mendes,SIM
+C0079,Bar Popular,30.430.826/4694-54,Conveniência,Sul de Minas,Passos,MG,Rafael Lima,S
+C0080,Restaurante Central,80.381.228/5961-88,Varejo Tradicional,Alto Paranaíba,Presidente Olegário,MG,Rafael Lima,S
+C0081,Bar Brasil,31.774.739/6531-82,Conveniência,Sul de Minas,Passos,MG,Carlos Mendes,S
+C0082,Mercado da Praça,93.315.885/7825-89,Varejo Tradicional,Sul de Minas,Varginha,MG,Tatiane Ferreira,S
+C0083,Atacadão Popular,71.350.924/7653-48,Food Service,Sul de Minas,Varginha,MG,Juliana Costa,S
+C0084,Bar Três Irmãos,71.575.308/6573-87,Varejo Tradicional,Sul de Minas,Pouso Alegre,MG,Fernanda Souza,S
+C0085,Lanchonete Santa Fé,57.627.675/2739-50,Atacado,Alto Paranaíba,Patos de Minas,MG,Fernanda Souza,S
+C0086,Restaurante Três Irmãos,28.199.151/5754-59,Varejo Tradicional,Noroeste de Minas,Paracatu,MG,Rafael Lima,S
+C0087,Bar Familiar,83.838.420/4110-30,Supermercado,Noroeste de Minas,João Pinheiro,MG,Juliana Costa,S
+C0088,Restaurante Três Irmãos,21.502.617/8491-40,Food Service,Noroeste de Minas,Unaí,MG,Fernanda Souza,S
+C0089,Mercado Popular,86.963.769/8710-46,Varejo Tradicional,Alto Paranaíba,Patrocínio,MG,Rafael Lima,S
+C0090,Conveniência Bom Preço,56.882.512/6995-15,,Sul de Minas,Varginha,MG,Juliana Costa,S
+C0091,Atacadão Central,80.395.175/7329-74,Conveniência,Sul de Minas,Varginha,MG,Juliana Costa,S
+C0092,Empório da Maria,22.503.482/6555-81,Conveniência,Alto Paranaíba,Patos de Minas,MG,Paulo Rodrigues,S
+C0093,Empório Vitória,74.141.146/1637-27,Supermercado,Triângulo Mineiro,Patos de Minas,MG,Tatiane Ferreira,S
+C0094,Atacadão Três Irmãos,87.627.243/6373-88,Food Service,Alto Paranaíba,Patos de Minas,MG,Paulo Rodrigues,S
+C0095,Empório das Flores,85.444.619/9351-78,Food Service,Triângulo Mineiro,Araguari,MG,Juliana Costa,S
+C0096,Mercado do Zé,96.212.526/6040-98,Food Service,Alto Paranaíba,Patrocínio,MG,Tatiane Ferreira,s
+C0097,Distribuidora Popular CÃ£o,16.697.591/3793-77,Conveniência,Sul de Minas,Passos,MG,Tatiane Ferreira,S
+C0098,Padaria do João,34.119.551/6139-63,Supermercado,Noroeste de Minas,Unaí,MG,Fernanda Souza,S
+C0099,Conveniência Vitória,17.822.241/9498-36,Supermercado,Noroeste de Minas,Bonfinópolis,MG,Rafael Lima,S
+C0100,Atacadão Santa Fé,32.570.645/6608-79,Food Service,Alto Paranaíba,Patrocínio,MG,Paulo Rodrigues,S
+C0101,Distribuidora Central,45.671.405/4684-48,Conveniência,Alto Paranaíba,Patos de Minas,MG,Paulo Rodrigues,S
+C0102,Lanchonete Três Irmãos,81.914.838/5480-46,Food Service,Triângulo Mineiro,Araguari,MG,Carlos Mendes,S
+C0103,Lanchonete União,47.143.394/2294-54,Food Service,Noroeste de Minas,Paracatu,MG,Juliana Costa,S
+C0104,Padaria Central,44.675.812/5450-27,Food Service,Alto Paranaíba,Presidente Olegário,MG,Carlos Mendes,S
+C0105,Mercado da Praça,91.338.153/2641-62,Supermercado,Triângulo Mineiro,Uberaba,MG,Paulo Rodrigues,S
+C0106,Bar do João,62.768.999/8793-71,Varejo Tradicional,Noroeste de Minas,Paracatu,MG,Tatiane Ferreira,S
+C0107,Lanchonete Popular,21.767.687/4804-78,Atacado,Triângulo Mineiro,Uberlândia,MG,Tatiane Ferreira,S
+C0108,Conveniência Express,14.956.506/9116-33,Supermercado,Sul de Minas,Passos,MG,Tatiane Ferreira,S
+C0109,Mercado Popular,87.209.443/5662-68,Varejo Tradicional,Alto Paranaíba,Presidente Olegário,MG,Tatiane Ferreira,S
+C0110,Atacadão Três Irmãos,34.928.215/6417-30,Supermercado,Noroeste de Minas,João Pinheiro,MG,Tatiane Ferreira,S
+C0111,Bar do João,47.681.790/4164-32,Atacado,Noroeste de Minas,João Pinheiro,MG,Rafael Lima,S
+C0112,Atacadão do Zé,61.785.197/4027-27,Food Service,Noroeste de Minas,Unaí,MG,Juliana Costa,S
+C0113,Mercado Popular,40.557.871/5374-52,Supermercado,Alto Paranaíba,Patrocínio,MG,Paulo Rodrigues,S
+C0114,Lanchonete das Flores,17.783.221/8625-49,Atacado,Sul de Minas,Passos,MG,Fernanda Souza,S
+C0115,Restaurante das Flores,91.402.476/4618-38,Conveniência,Noroeste de Minas,Unaí,MG,Fernanda Souza,S
+C0200,Distribuidora União,53.923.217/8673-19,Atacado,Triângulo Mineiro,Araguari,MG,Fernanda Souza,S
+C0201,AtacadÃ£o do ZÃ©,60.114.370/9791-25,Food Service,Triângulo Mineiro,Uberlândia,MG,Juliana Costa,S
+C0202,Empório Santa Fé,57.210.791/4830-70,Atacado,Alto Paranaíba,Presidente Olegário,MG,Carlos Mendes,S
+C0203,Padaria da Praça,91.943.575/5951-93,Conveniência,Alto Paranaíba,Patos de Minas,MG,Juliana Costa,S
+C0204,Mercado do João,73.218.199/4846-78,Supermercado,Sul de Minas,Varginha,MG,Fernanda Souza,S

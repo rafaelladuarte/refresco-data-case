@@ -1,0 +1,131 @@
+version: '3.8'
+
+x-airflow-common: &airflow-common
+  image: apache/airflow:2.9.0
+  environment: &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-airflow:5432/airflow
+    AIRFLOW__CORE__FERNET_KEY: 'wYhQ2FzX8Q7lYk7F5v8zK0pQwGq9ZbFvYkJk9Jr2s8Q='
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.session,airflow.api.auth.backend.basic_auth'
+    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
+    GOLD_DB_CONN: postgresql+psycopg2://uberlandia:senha123@postgres-gold:5432/gold
+
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./pipeline:/opt/airflow/pipeline
+    - ./data:/opt/airflow/data
+    - ./logs:/opt/airflow/logs
+
+  depends_on:
+    postgres-airflow:
+      condition: service_healthy
+
+  networks:
+    - uberlandia-net
+
+services:
+
+  # ─── Banco Airflow ─────────────────────────────────────────────
+  postgres-airflow:
+    image: postgres:15
+    container_name: postgres-airflow
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres_airflow_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-U", "airflow" ]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+    networks:
+      - uberlandia-net
+
+  # ─── Banco Gold ────────────────────────────────────────────────
+  postgres-gold:
+    image: postgres:15
+    container_name: postgres-gold
+    environment:
+      POSTGRES_USER: uberlandia
+      POSTGRES_PASSWORD: senha123
+      POSTGRES_DB: gold
+    volumes:
+      - postgres_gold_data:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-U", "uberlandia", "-d", "gold" ]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+    networks:
+      - uberlandia-net
+
+  # ─── Init (robusto) ────────────────────────────────────────────
+  airflow-init:
+    <<: *airflow-common
+    container_name: airflow-init
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        set -e
+        echo "Aguardando banco..."
+        sleep 10
+        airflow db migrate
+        airflow users create \
+          --username admin \
+          --password admin \
+          --firstname Admin \
+          --lastname User \
+          --role Admin \
+          --email admin@uberlandia.com || true
+        echo "Airflow inicializado com sucesso."
+    restart: "no"
+
+  # ─── Webserver ─────────────────────────────────────────────────
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: airflow-webserver
+    command: webserver
+    ports:
+      - "8080:8080"
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [ "CMD", "curl", "--fail", "http://localhost:8080/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # ─── Scheduler ─────────────────────────────────────────────────
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: airflow-scheduler
+    command: scheduler
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [ "CMD", "airflow", "jobs", "check", "--job-type", "SchedulerJob", "--hostname", "$${HOSTNAME}" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+volumes:
+  postgres_airflow_data:
+  postgres_gold_data:
+
+networks:
+  uberlandia-net:
+    driver: bridge

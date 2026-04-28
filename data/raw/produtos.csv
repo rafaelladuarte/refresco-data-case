@@ -1,0 +1,26 @@
+id_produto,nome_produto,familia,marca,embalagem,volume_ml,preco_tabela,custo_unitario
+P001,Coca-Cola Original 350ml LT,Refrigerantes,Coca-Cola,Lata,350 ml,4.20,2.10
+P002,Coca-Cola Original 2L PET,Refrigerante,Coca-Cola,PET,2000,9.50,4.50
+P003,Coca-Cola Original 1L PET,Refrigerantes,Coca-Cola,PET,1000,6.80,3.20
+P004,Coca-Cola Zero 350ml LT,Refrigerantes,Coca-Cola,Lata,350 ml,4.20,2.10
+P005,Sprite 350ml LT,Refrigerante,Sprite,Lata,350,3.90,1.95
+P006,Sprite 2L PET,Refrigerante,Sprite,PET,2000,8.90,4.20
+P007,Fanta Laranja 350ml LT,Refrigerantes,Fanta,Lata,350,3.90,1.95
+P008,Fanta Uva 350ml LT,Refrigerante,Fanta,Lata,350,3.90,1.95
+P009,Schweppes Tônica 350ml LT,Refrigerante,Schweppes,Lata,350 ml,4.50,2.25
+P010,Del Valle Uva 1L TP,Suco,Del Valle,Tetra,1000,7.20,3.60
+P011,Del Valle Laranja 1L TP,Suco,Del Valle,Tetra,1000,7.20,3.60
+P012,Del Valle Pêssego 200ml TP,Suco,Del Valle,Tetra,200,2.80,0.00
+P013,Aquarius Fresh Limão 500ml PET,Suco,Aquarius,PET,500,4.50,2.25
+P014,AdeS Baunilha 1L TP,Bebida Vegetal,AdeS,Tetra,1000,3.00,4.25
+P015,Powerade Citrus 500ml PET,Isotônico,Powerade,PET,500,5.80,2.90
+P016,Powerade Uva 500ml PET,Isotônico,Powerade,PET,500,5.80,2.90
+P017,Monster Energy 473ml LT,Energético,Monster,Lata,473,9.90,4.95
+P018,Monster Ultra 473ml LT,Energético,Monster,Lata,473,9.90,4.95
+P019,Burn Energy 269ml LT,Energético,Burn,Lata,269,7.50,0.00
+P020,Crystal 500ml PET,Água,Crystal,PET,500,2.20,0.80
+P021,"Crystal 1,5L PET",Água,Crystal,PET,1500,3.50,1.20
+P022,Crystal Coco 1L TP,Água de Coco,Crystal,Tetra,1000,6.90,3.45
+P023,Coca-Cola Original 600ml PET,Refrigerante,Coca-Cola,PET,600,5.50,2.60
+P024,Fanta Laranja 2L PET,Refrigerante,Fanta,PET,2000,8.90,4.20
+P025,Sprite Limão 600ml PET,Refrigerante,Sprite,PET,600,5.20,2.50
