@@ -6,7 +6,7 @@ import s3fs
 import io
 import os
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 API_URL = "https://archive-api.open-meteo.com/v1/archive?latitude=-21.78&longitude=-43.35&start_date=2024-01-01&end_date=2024-12-31&daily=temperature_2m_max,precipitation_sum&timezone=America%2FSao_Paulo"
@@ -14,10 +14,10 @@ API_BASE_URL = "https://archive-api.open-meteo.com/v1/archive"
 
 def get_s3_client():
     """Retorna uma nova instância do cliente S3FileSystem"""
-    endpoint_url = os.environ.get("AIRFLOW__S3__ENDPOINT_URL", "http://minio:9000")
+    endpoint_url = os.getenv("AIRFLOW__S3__ENDPOINT_URL", "http://localhost:9000")
     return s3fs.S3FileSystem(
-        key="minio",
-        secret="minio123",
+        key=os.getenv("AWS_ACCESS_KEY_ID", "minio"),
+        secret=os.getenv("AWS_SECRET_ACCESS_KEY", "minio123"),
         client_kwargs={"endpoint_url": endpoint_url}
     )
 
@@ -80,11 +80,11 @@ def save_to_bronze(df):
             df.to_csv(f, index=False)
 
         if fs.exists(path):
-            logger.info(f"✓ Salvo com sucesso no MinIO: {path}")
+            logger.info(f"[OK] Salvo com sucesso no MinIO: {path}")
             file_size = fs.size(path)
-            logger.info(f"  Tamanho: {file_size} bytes")
+            logger.info(f"Tamanho: {file_size} bytes")
         else:
-            logger.error(f"✗ Arquivo não encontrado após salvamento")
+            logger.error(f"[ERRO] Arquivo não encontrado após salvamento")
 
     except Exception as e:
         logger.error(f"Erro ao salvar Bronze: {e}")
@@ -96,18 +96,18 @@ def main():
     fs = get_s3_client()
     try:
         fs.ls('/')
-        logger.info("✓ Conexão com MinIO estabelecida")
+        logger.info("[OK] Conexão com MinIO estabelecida")
     except Exception as e:
-        logger.error(f"✗ Erro ao conectar ao MinIO: {e}")
+        logger.error(f"[ERRO] Erro ao conectar ao MinIO: {e}")
         raise Exception(f"Falha de conexão com MinIO: {e}")
 
     df = fetch_weather_data()
     if df is None or df.empty:
-        raise ValueError("Falha: Nenhum dado de clima retornado pela API.")
+        raise ValueError("[ERRO] Falha: Nenhum dado de clima retornado pela API.")
         
     save_to_bronze(df)
 
-    logger.info("Ingestão finalizada")
+    logger.info("[OK] Ingestão finalizada")
 
 if __name__ == "__main__":
     main()

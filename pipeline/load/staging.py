@@ -9,27 +9,24 @@ logger = logging.getLogger(__name__)
 def load_to_staging():
     logger.info("Iniciando carga de dados da camada Silver para Staging (Postgres-Gold)")
     
-    # Configurações do MinIO
-    endpoint_url = os.environ.get("AIRFLOW__S3__ENDPOINT_URL", "http://minio:9000")
+    endpoint_url = os.getenv("AIRFLOW__S3__ENDPOINT_URL", "http://localhost:9000")
     storage_options = {
-        "key": "minio",
-        "secret": "minio123",
+        "key": os.getenv("AWS_ACCESS_KEY_ID"),
+        "secret": os.getenv("AWS_SECRET_ACCESS_KEY"),
         "client_kwargs": {"endpoint_url": endpoint_url}
     }
     
-    # Configurações do Postgres (Target Gold)
-    pg_user = os.environ.get("POSTGRES_USER", "uberlandia")
-    pg_pass = os.environ.get("POSTGRES_PASSWORD", "senha123")
-    pg_host = os.environ.get("POSTGRES_HOST", "postgres-gold")
-    pg_port = os.environ.get("POSTGRES_PORT", "5432")
-    pg_db = os.environ.get("POSTGRES_DB", "gold")
+    pg_user = os.getenv("POSTGRES_USER", "uberlandia")
+    pg_pass = os.getenv("POSTGRES_PASSWORD", "senha123")
+    pg_host = os.getenv("POSTGRES_HOST", "localhost")
+    pg_port = os.getenv("POSTGRES_PORT", "5432")
+    pg_db = os.getenv("POSTGRES_DB", "gold")
     
     engine_url = f"postgresql://{pg_user}:{pg_pass}@{pg_host}:{pg_port}/{pg_db}"
     engine = create_engine(engine_url)
     
     schema_name = 'silver_stage'
     
-    # Criar o schema se não existir
     try:
         with engine.begin() as conn:
             conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema_name};"))
@@ -45,26 +42,27 @@ def load_to_staging():
         s3_path = f"s3://silver/{tabela}/"
         
         try:
-            # Lendo os dados parquets do MinIO
             df = pd.read_parquet(s3_path, storage_options=storage_options)
             logger.info(f"Lidos {len(df)} registros da tabela {tabela} do S3.")
             
-            # Parâmetros de escrita para o to_sql
             kwargs = {
                 "name": tabela,
                 "schema": schema_name,
-                "con": engine,
                 "if_exists": "replace",
                 "index": False
             }
             
-            # Otimização específica para vendas
             if tabela == 'vendas':
                 kwargs["chunksize"] = 10000
                 kwargs["method"] = 'multi'
                 
-            # Salvando no Postgres
-            df.to_sql(**kwargs)
+            with engine.begin() as conn:
+                conn.execute(text(f"DROP TABLE IF EXISTS {schema_name}.{tabela} CASCADE;"))
+                logger.info(f"DROP TABLE CASCADE executado com sucesso para {schema_name}.{tabela}.")
+                
+                kwargs["con"] = conn
+                df.to_sql(**kwargs)
+                
             logger.info(f"Tabela {tabela} carregada com sucesso no Postgres (Schema: {schema_name}).")
             
         except Exception as e:

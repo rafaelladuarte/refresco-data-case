@@ -7,6 +7,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 def normalize_ativo(value):
+    """Normaliza valores booleanos da coluna 'ativo'."""
     if pd.isna(value):
         return None
     v = str(value).strip().lower()
@@ -19,10 +20,10 @@ def normalize_ativo(value):
 def main():
     logger.info("Iniciando processamento Silver para Clientes")
     
-    endpoint_url = os.environ.get("AIRFLOW__S3__ENDPOINT_URL", "http://minio:9000")
+    endpoint_url = os.getenv("AIRFLOW__S3__ENDPOINT_URL", "http://localhost:9000")
     storage_options = {
-        "key": "minio",
-        "secret": "minio123",
+        "key": os.getenv("AWS_ACCESS_KEY_ID", "minio"),
+        "secret": os.getenv("AWS_SECRET_ACCESS_KEY", "minio123"),
         "client_kwargs": {"endpoint_url": endpoint_url}
     }
     
@@ -34,11 +35,17 @@ def main():
             logger.warning("Nenhum arquivo encontrado em bronze/clientes/")
             return
             
-        logger.info(f"Encontrados {len(arquivos)} arquivos. Lendo dados...")
-        df = pd.concat([pd.read_csv(f"s3://{arquivo}", storage_options=storage_options) for arquivo in arquivos], ignore_index=True)
-        logger.info(f"Linhas lidas da Bronze: {len(df)}")
+        logger.info(f"Encontrados {len(arquivos)} arquivos na Bronze. Lendo dados...")
+        df = pd.concat(
+            [
+                pd.read_csv(f"s3://{arquivo}",
+                storage_options=storage_options) 
+                for arquivo in arquivos
+            ], 
+            ignore_index=True
+        )
+        logger.info(f"Linhas lidas inicialmente: {len(df)}")
         
-        # Limpeza
         cols_str = ["nome_cliente", "canal", "regiao", "cidade", "uf", "representante"]
         for col in cols_str:
             df[col] = df[col].astype(str).str.strip()
@@ -47,33 +54,31 @@ def main():
         df["uf"] = df["uf"].str.upper()
         df["ativo"] = df["ativo"].apply(normalize_ativo)
         
-        # Filtros
         df = df[df["cnpj"].notna()]
         df = df[df["nome_cliente"].notna()]
-        logger.info("Nulos críticos removidos.")
         
-        # Deduplicar
         df = df.sort_values("_ingested_at")
         df = df.drop_duplicates(subset=["cnpj"], keep="last")
-        logger.info(f"Deduplicação concluída. Linhas finais: {len(df)}")
+        logger.info(f"Deduplicação concluída. Linhas para salvar: {len(df)}")
         
-        target_path = "silver/clientes/"
-        if fs.exists(target_path):
-            fs.rm(target_path, recursive=True)
-            logger.info(f"Diretório {target_path} limpo no S3 antes da reescrita.")
+        target_path_full = "s3://silver/clientes/"
         
-        # Salvar
+        if fs.exists(target_path_full):
+            logger.info(f"Limpando diretório existente: {target_path_full}")
+            fs.rm(target_path_full, recursive=True)
+
         df.to_parquet(
-            path=f"s3://{target_path}",
+            path=target_path_full,
             partition_cols=["regiao"],
             storage_options=storage_options,
             index=False,
             compression="snappy"
         )
-        logger.info("✓ Dados salvos com sucesso na camada Silver (MinIO)!")
+        
+        logger.info("[OK] Tabela de Clientes processada e salva com sucesso na Silver!")
         
     except Exception as e:
-        logger.error(f"✗ Erro no processamento de Clientes: {str(e)}")
+        logger.error(f"[ERRO] Erro no processamento de Clientes: {str(e)}")
         raise
 
 if __name__ == "__main__":

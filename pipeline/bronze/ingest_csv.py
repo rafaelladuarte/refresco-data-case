@@ -6,23 +6,22 @@ from pathlib import Path
 import s3fs
 import io
 
-# Configuração de Logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-airflow_home = os.environ.get("AIRFLOW_HOME", "/opt/airflow")
+airflow_home = os.getenv("AIRFLOW_HOME", "/opt/airflow")
 LOCAL_RAW_DIR = Path(f"{airflow_home}/data/raw")
-BRONZE_DIR = "bronze"  # Destino no MinIO
+BRONZE_DIR = "bronze"
 
 def get_s3_client():
     """Retorna uma nova instância do cliente S3FileSystem (fork-safe)"""
-    endpoint_url = os.environ.get("AIRFLOW__S3__ENDPOINT_URL", "http://minio:9000")
+    endpoint_url = os.getenv("AIRFLOW__S3__ENDPOINT_URL", "http://localhost:9000")
     return s3fs.S3FileSystem(
-        key="minio",
-        secret="minio123",
+        key=os.getenv("AWS_ACCESS_KEY_ID", "minio"),
+        secret=os.getenv("AWS_SECRET_ACCESS_KEY", "minio123"),
         client_kwargs={"endpoint_url": endpoint_url}
     )
 
@@ -51,8 +50,7 @@ def process_table(fs, table_name: str):
     adiciona metadados e salva na camada Bronze no MinIO
     """
     source_file = LOCAL_RAW_DIR / f"{table_name}.csv"
-    
-    # Verifica se o arquivo existe localmente
+
     if not source_file.exists():
         msg = f"Arquivo fonte não encontrado: {source_file}."
         logger.error(msg)
@@ -61,51 +59,40 @@ def process_table(fs, table_name: str):
     try:
         logger.info(f"Iniciando ingestão da tabela: {table_name}")
         
-        # 1. Leitura do arquivo local
         df = pd.read_csv(source_file, encoding="latin1")
-        logger.info(f"  - Registros lidos: {len(df)}")
-        logger.info(f"  - Colunas: {list(df.columns)}")
+        logger.info(f"Registros lidos: {len(df)}")
+        logger.info(f"Colunas: {list(df.columns)}")
         
-        # 2. Enriquecimento com Metadados
         df['_ingested_at'] = get_timestamp()
         df['_source_file'] = f"{table_name}.csv"
         
-        # 3. Definição do particionamento
         ingestion_date = get_ingestion_date()
         partition_path = f"{BRONZE_DIR}/{table_name}/ingestion_date={ingestion_date}"
         
-        # 4. Garantir que o bucket bronze existe
         if not ensure_bucket_exists(fs, BRONZE_DIR):
             raise Exception("Não foi possível verificar/criar o bucket bronze")
         
-        # 5. Criar diretório de partição (se não existir)
         if not fs.exists(partition_path):
             fs.mkdir(partition_path)
-            logger.info(f"  - Diretório criado: {partition_path}")
+            logger.info(f"Diretório criado: {partition_path}")
         
         target_path = f"{partition_path}/{table_name}.csv"
         
-        # 6. Escrita na camada Bronze (CSV) no MinIO
         csv_buffer = io.StringIO()
         df.to_csv(csv_buffer, index=False)
         
         with fs.open(target_path, 'w') as f:
             f.write(csv_buffer.getvalue())
         
-        # Verificar se salvou
         if fs.exists(target_path):
             file_size = fs.size(target_path)
-            logger.info(f"✓ Sucesso: {table_name} salvo no MinIO")
-            logger.info(f"  - Caminho: {target_path}")
-            logger.info(f"  - Tamanho: {file_size} bytes")
-            logger.info(f"  - Partição: {ingestion_date}")
+            logger.info(f"[OK] Sucesso: {table_name} salvo no MinIO")
+            logger.info(f"- Caminho: {target_path}")
+            logger.info(f"- Tamanho: {file_size} bytes")
+            logger.info(f"- Partição: {ingestion_date}")
         else:
-            logger.error(f"✗ Falha: arquivo não encontrado após salvamento")
+            logger.error(f"[ERRO] Falha: arquivo não encontrado após salvamento")
             raise Exception(f"Falha ao salvar o arquivo {target_path}")
-        
-        # 7. (Opcional) Mostrar preview dos dados
-        logger.info(f"  - Preview dos dados:")
-        logger.info(f"    {df.head(2).to_string()}")
         
     except Exception as e:
         logger.error(f"Erro ao processar a tabela {table_name}: {str(e)}")
@@ -144,11 +131,11 @@ def list_bronze_files(fs):
                         for file in files:
                             if file.endswith('.csv'):
                                 info = fs.stat(file)
-                                logger.info(f"  - {file}")
-                                logger.info(f"    Tamanho: {info['size']} bytes")
-                                logger.info(f"    Modificado: {datetime.fromtimestamp(info['mtime'])}")
+                                logger.info(f"{file}")
+                                logger.info(f"- Tamanho: {info['size']} bytes")
+                                logger.info(f"- Modificado: {datetime.fromtimestamp(info['mtime'])}")
                 else:
-                    logger.info(f"  - Tabela '{table}' ainda não processada")
+                    logger.info(f"- Tabela '{table}' ainda não processada")
     except Exception as e:
         logger.error(f"Erro ao listar arquivos: {e}")
 
@@ -156,26 +143,18 @@ def main():
     """Função principal para coordenar a ingestão das entidades."""
     tables = ['clientes', 'financeiro', 'produtos', 'vendas']
     
-    logger.info("=" * 60)
     logger.info(f"Pipeline de Ingestão: Data Local ({LOCAL_RAW_DIR}) -> MinIO (Bronze)")
-    logger.info("=" * 60)
     
-    # Verificar arquivos disponíveis localmente. Irá gerar Exception se não achar.
     local_files = list_local_raw_files()
     
     fs = get_s3_client()
     
-    # Processar cada tabela
     for table in tables:
-        logger.info("-" * 40)
         process_table(fs, table)
     
-    # Listar arquivos processados no MinIO
     list_bronze_files(fs)
     
-    logger.info("=" * 60)
-    logger.info("✓ Pipeline de Ingestão finalizado com sucesso.")
-    logger.info("=" * 60)
+    logger.info("[OK] Pipeline de Ingestão finalizado com sucesso.")
 
 if __name__ == "__main__":
     main()
