@@ -15,6 +15,7 @@ python-dotenv = "*"
 s3fs = "*"
 
 [dev-packages]
+ipykernel = "*"
 
 [requires]
 python_version = "3.13"

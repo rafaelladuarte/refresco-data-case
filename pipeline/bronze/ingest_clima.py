@@ -4,6 +4,7 @@ import logging
 from datetime import datetime
 import s3fs
 import io
+import os
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -11,14 +12,16 @@ logger = logging.getLogger(__name__)
 API_URL = "https://archive-api.open-meteo.com/v1/archive?latitude=-21.78&longitude=-43.35&start_date=2024-01-01&end_date=2024-12-31&daily=temperature_2m_max,precipitation_sum&timezone=America%2FSao_Paulo"
 API_BASE_URL = "https://archive-api.open-meteo.com/v1/archive"
 
-# Configuração do S3
-fs = s3fs.S3FileSystem(
-    key="minio",
-    secret="minio123",
-    client_kwargs={"endpoint_url": "http://localhost:9000"}
-)
+def get_s3_client():
+    """Retorna uma nova instância do cliente S3FileSystem"""
+    endpoint_url = os.environ.get("AIRFLOW__S3__ENDPOINT_URL", "http://minio:9000")
+    return s3fs.S3FileSystem(
+        key="minio",
+        secret="minio123",
+        client_kwargs={"endpoint_url": endpoint_url}
+    )
 
-def ensure_bucket_exists(bucket_name):
+def ensure_bucket_exists(fs, bucket_name):
     """Verifica e cria bucket se necessário"""
     try:
         if not fs.exists(bucket_name):
@@ -62,8 +65,9 @@ def save_to_bronze(df):
         logger.warning("DF vazio")
         return
 
+    fs = get_s3_client()
     try:
-        if not ensure_bucket_exists("bronze"):
+        if not ensure_bucket_exists(fs, "bronze"):
             raise Exception("Não foi possível criar/verificar o bucket 'bronze'")
 
         df["_ingested_at"] = datetime.now()
@@ -89,14 +93,18 @@ def save_to_bronze(df):
 def main():
     logger.info("Iniciando ingestão clima -> Bronze (MinIO)")
 
+    fs = get_s3_client()
     try:
         fs.ls('/')
         logger.info("✓ Conexão com MinIO estabelecida")
     except Exception as e:
         logger.error(f"✗ Erro ao conectar ao MinIO: {e}")
-        return
+        raise Exception(f"Falha de conexão com MinIO: {e}")
 
     df = fetch_weather_data()
+    if df is None or df.empty:
+        raise ValueError("Falha: Nenhum dado de clima retornado pela API.")
+        
     save_to_bronze(df)
 
     logger.info("Ingestão finalizada")

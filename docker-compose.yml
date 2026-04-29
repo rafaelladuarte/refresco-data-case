@@ -21,6 +21,7 @@ x-airflow-common: &airflow-common
     - ./dags:/opt/airflow/dags
     - ./pipeline:/opt/airflow/pipeline
     - ./logs:/opt/airflow/logs
+    - ./data/raw:/opt/airflow/data/raw
 
   depends_on:
     postgres-airflow:
@@ -31,9 +32,6 @@ x-airflow-common: &airflow-common
 
 services:
 
-  # ─────────────────────────────
-  # PostgreSQL Airflow metadata
-  # ─────────────────────────────
   postgres-airflow:
     image: postgres:15
     container_name: postgres-airflow
@@ -49,10 +47,6 @@ services:
       retries: 5
     networks:
       - uberlandia-net
-
-  # ─────────────────────────────
-  # PostgreSQL Gold (analytics)
-  # ─────────────────────────────
   postgres-gold:
     image: postgres:15
     container_name: postgres-gold
@@ -72,9 +66,6 @@ services:
     networks:
       - uberlandia-net
 
-  # ─────────────────────────────
-  # MinIO (S3 local)
-  # ─────────────────────────────
   minio:
     image: minio/minio:latest
     container_name: minio
@@ -90,9 +81,6 @@ services:
     networks:
       - uberlandia-net
 
-  # ─────────────────────────────
-  # Airflow Init
-  # ─────────────────────────────
   airflow-init:
     <<: *airflow-common
     container_name: airflow-init
@@ -116,10 +104,6 @@ services:
 
         echo "Airflow inicializado com sucesso."
     restart: "no"
-
-  # ─────────────────────────────
-  # Webserver
-  # ─────────────────────────────
   airflow-webserver:
     <<: *airflow-common
     container_name: airflow-webserver
@@ -132,10 +116,6 @@ services:
     restart: unless-stopped
     networks:
       - uberlandia-net
-
-  # ─────────────────────────────
-  # Scheduler
-  # ─────────────────────────────
   airflow-scheduler:
     <<: *airflow-common
     container_name: airflow-scheduler

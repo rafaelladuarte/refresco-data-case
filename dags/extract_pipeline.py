@@ -35,5 +35,4 @@ with DAG(
         python_callable=ingest_clima_main,
     )
 
-    # Executa em paralelo
     [ingest_csv_task, ingest_clima_task]
