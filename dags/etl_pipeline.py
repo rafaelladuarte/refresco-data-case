@@ -14,6 +14,8 @@ from pipeline.silver.clean_financeiro import main as clean_financeiro_silver
 from pipeline.silver.clean_clientes import main as clean_clientes_silver
 from pipeline.silver.clean_clima import main as clean_clima_silver
 
+from pipeline.load.staging import load_to_staging
+
 default_args = {
     'owner': 'antigravity',
     'depends_on_past': False,
@@ -66,6 +68,12 @@ with DAG(
         python_callable=clean_clima_silver,
     )
 
+    task_load_to_staging = PythonOperator(
+        task_id='load_to_staging',
+        python_callable=load_to_staging,
+        execution_timeout=timedelta(minutes=15),
+    )
+
     ingest_csv_task >> [
         clean_vendas_task,
         clean_produtos_task,
@@ -74,3 +82,11 @@ with DAG(
     ]
 
     ingest_clima_task >> clean_clima_task
+    
+    [
+        clean_vendas_task,
+        clean_produtos_task,
+        clean_financeiro_task,
+        clean_clientes_task,
+        clean_clima_task
+    ] >> task_load_to_staging
