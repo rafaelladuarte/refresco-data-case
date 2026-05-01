@@ -1,0 +1,69 @@
+
+
+with vendas as (
+    select * from "gold"."load_stage"."stg_vendas"
+    
+    -- this filter will only be applied on an incremental run
+    where data_emissao > (select coalesce(max(data_emissao), '1900-01-01') from "gold"."gold"."fato_vendas")
+    
+),
+
+financeiro as (
+    select * from "gold"."load_stage"."stg_financeiro"
+),
+
+clientes as (
+    select * from "gold"."gold"."dim_cliente"
+),
+
+produtos as (
+    select * from "gold"."gold"."dim_produto"
+),
+
+representantes as (
+    select * from "gold"."gold"."dim_representante"
+)
+
+select
+    md5(cast(coalesce(cast(v.id_venda as TEXT), '_dbt_utils_surrogate_key_null_') as TEXT)) as sk_venda,
+    v.id_venda,
+    
+    -- chaves estrangeiras
+    c.sk_cliente,
+    p.sk_produto,
+    cast(to_char(v.data_emissao, 'YYYYMMDD') as integer) as sk_tempo,
+    r.sk_representante,
+    
+    -- métricas e calculados
+    v.qtd_caixas,
+    v.preco_unitario,
+    v.desconto_pct,
+    v.receita_liquida,
+    (v.qtd_caixas * p.custo_unitario) as custo_total,
+    (v.receita_liquida - (v.qtd_caixas * p.custo_unitario)) as margem_bruta,
+    
+    -- status financeiro
+    -- NULL esperado: vendas pendentes de lançamento não possuem registro em stg_financeiro.
+    -- Investigado e confirmado como comportamento de negócio (2024-05-01).
+    -- ~30% das vendas (921/3375) estão nessa condição, distribuídas uniformemente por mês.
+    f.tipo_lancamento,
+    f.status_financeiro,
+    
+    -- controle
+    v.data_emissao,
+    v.source_file,
+    v.ingested_at
+
+from vendas v
+left join clientes c 
+    on v.id_cliente = c.id_cliente
+left join produtos p 
+    on v.id_produto = p.id_produto
+left join representantes r 
+    on v.nome_representante = r.nome_representante 
+    and v.canal_venda = r.canal_venda
+-- LEFT JOIN intencional: nem toda venda possui lançamento financeiro.
+-- Vendas sem correspondente em stg_financeiro = pendentes de lançamento.
+-- Não usar INNER JOIN aqui; faria sumir ~30% das vendas da fato.
+left join financeiro f 
+    on v.id_venda = f.id_venda

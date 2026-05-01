@@ -2,9 +2,13 @@ import pandas as pd
 import s3fs
 import logging
 import os
+import re
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# Formato válido de id_cliente: C seguido de 4 dígitos (ex: C0001)
+PATTERN_ID_CLIENTE = re.compile(r'^C\d{4}$', re.IGNORECASE)
 
 def normalize_ativo(value):
     """Normaliza valores booleanos da coluna 'ativo'."""
@@ -54,9 +58,21 @@ def main():
         df["uf"] = df["uf"].str.upper()
         df["ativo"] = df["ativo"].apply(normalize_ativo)
         
+        # Normaliza id_cliente: remove espaços, descarta nulos e formatos inválidos
+        df["id_cliente"] = df["id_cliente"].fillna("").astype(str).str.strip()
+
+        mask_id_invalido = ~df["id_cliente"].str.match(PATTERN_ID_CLIENTE)
+        df_id_invalido = df[mask_id_invalido].copy()
+        if not df_id_invalido.empty:
+            logger.warning(
+                f"{len(df_id_invalido)} clientes com id_cliente inválido ou vazio descartados: "
+                f"{sorted(df_id_invalido['id_cliente'].unique().tolist())}"
+            )
+        df = df[~mask_id_invalido].copy()
+
         df = df[df["cnpj"].notna()]
         df = df[df["nome_cliente"].notna()]
-        
+
         df = df.sort_values("_ingested_at")
         df = df.drop_duplicates(subset=["cnpj"], keep="last")
         logger.info(f"Deduplicação concluída. Linhas para salvar: {len(df)}")

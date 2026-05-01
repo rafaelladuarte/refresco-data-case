@@ -1,5 +1,3 @@
-version: '3.8'
-
 x-airflow-common: &airflow-common
   build: .
   user: "50000:50000"
@@ -137,6 +135,21 @@ services:
       airflow-init:
         condition: service_completed_successfully
     restart: unless-stopped
+    networks:
+      - uberlandia-net
+
+  dbt-core:
+    image: ghcr.io/dbt-labs/dbt-postgres:1.8.latest
+    container_name: dbt-core
+    env_file:
+      - .env
+    volumes:
+      - ./dbt:/usr/app/dbt
+    working_dir: /usr/app/dbt
+    entrypoint: ["tail", "-f", "/dev/null"]
+    depends_on:
+      postgres-gold:
+        condition: service_healthy
     networks:
       - uberlandia-net
 

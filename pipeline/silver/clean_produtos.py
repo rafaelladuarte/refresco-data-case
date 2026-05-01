@@ -2,9 +2,13 @@ import pandas as pd
 import s3fs
 import logging
 import os
+import re
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# Formato válido de id_produto: P seguido de 3 dígitos (ex: P001)
+PATTERN_ID_PRODUTO = re.compile(r'^P\d{3}$', re.IGNORECASE)
 
 def fix_encoding(text):
     """Corrige problemas de encoding (Latin1 para UTF-8)."""
@@ -53,6 +57,18 @@ def main():
             
         df["_ingested_at"] = pd.to_datetime(df["_ingested_at"], errors="coerce")
         
+        # Normaliza id_produto: remove espaços e descarta formatos inválidos
+        df["id_produto"] = df["id_produto"].fillna("").astype(str).str.strip()
+
+        mask_id_invalido = ~df["id_produto"].str.match(PATTERN_ID_PRODUTO)
+        df_id_invalido = df[mask_id_invalido].copy()
+        if not df_id_invalido.empty:
+            logger.warning(
+                f"{len(df_id_invalido)} produtos com id_produto inválido ou vazio descartados: "
+                f"{sorted(df_id_invalido['id_produto'].unique().tolist())}"
+            )
+        df = df[~mask_id_invalido].copy()
+
         df = df.sort_values("_ingested_at").drop_duplicates(subset=["id_produto"], keep="last")
         logger.info(f"Deduplicação concluída. Linhas finais: {len(df)}")
         

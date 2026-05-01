@@ -11,8 +11,8 @@ def load_to_staging():
     
     endpoint_url = os.getenv("AIRFLOW__S3__ENDPOINT_URL", "http://localhost:9000")
     storage_options = {
-        "key": os.getenv("AWS_ACCESS_KEY_ID"),
-        "secret": os.getenv("AWS_SECRET_ACCESS_KEY"),
+        "key": os.getenv("AWS_ACCESS_KEY_ID", "minio"),
+        "secret": os.getenv("AWS_SECRET_ACCESS_KEY", "minio123"),
         "client_kwargs": {"endpoint_url": endpoint_url}
     }
     
@@ -25,14 +25,14 @@ def load_to_staging():
     engine_url = f"postgresql://{pg_user}:{pg_pass}@{pg_host}:{pg_port}/{pg_db}"
     engine = create_engine(engine_url)
     
-    schema_name = 'silver_stage'
+    schema_name = 'load_stage'
     
     try:
         with engine.begin() as conn:
             conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema_name};"))
-            logger.info(f"Schema '{schema_name}' verificado/criado com sucesso.")
+            logger.info(f"[OK] Schema '{schema_name}' verificado/criado com sucesso.")
     except Exception as e:
-        logger.error(f"Erro ao criar o schema {schema_name}: {e}")
+        logger.error(f"[ERRO] Erro ao criar o schema {schema_name}: {e}")
         raise
         
     tabelas = ['vendas', 'produtos', 'clientes', 'clima', 'financeiro']
@@ -63,10 +63,10 @@ def load_to_staging():
                 kwargs["con"] = conn
                 df.to_sql(**kwargs)
                 
-            logger.info(f"Tabela {tabela} carregada com sucesso no Postgres (Schema: {schema_name}).")
+            logger.info(f"[OK] Tabela {tabela} carregada com sucesso no Postgres (Schema: {schema_name}).")
             
         except Exception as e:
-            logger.error(f"Erro ao carregar a tabela {tabela}: {e}")
+            logger.error(f"[ERRO] Erro ao carregar a tabela {tabela}: {e}")
             raise
             
     logger.info("Carga de todos os arquivos para staging finalizada com sucesso!")

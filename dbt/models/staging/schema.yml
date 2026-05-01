@@ -1,0 +1,88 @@
+version: 2
+
+sources:
+  - name: load_stage
+    schema: load_stage
+    tables:
+      - name: vendas
+      - name: produtos
+      - name: clientes
+      - name: financeiro
+      - name: clima
+
+models:
+  - name: stg_vendas
+    description: "Modelo staging com dados limpos e tipados da tabela de vendas."
+    columns:
+      - name: id_venda
+        description: "Identificador único da venda."
+        data_tests:
+          - not_null
+      - name: id_cliente
+        description: "Chave estrangeira do cliente."
+        data_tests:
+          - not_null
+      - name: id_produto
+        description: "Chave estrangeira do produto."
+        data_tests:
+          - not_null
+      - name: data_emissao
+        description: "Data em que a venda foi realizada."
+        data_tests:
+          - not_null
+      - name: qtd_caixas
+        description: "Quantidade de caixas vendidas."
+        data_tests:
+          - not_null
+
+  - name: stg_produtos
+    description: "Modelo staging com dados limpos e tipados da tabela de produtos."
+    columns:
+      - name: id_produto
+        description: "Identificador único do produto."
+        data_tests:
+          - not_null
+          - unique
+      - name: nome_produto
+        description: "Nome do produto."
+        data_tests:
+          - not_null
+
+  - name: stg_clientes
+    description: "Modelo staging com dados limpos e tipados da tabela de clientes."
+    columns:
+      - name: id_cliente
+        description: "Identificador único do cliente."
+        data_tests:
+          - not_null
+          - unique
+      - name: nome_cliente
+        description: "Nome do cliente."
+        data_tests:
+          - not_null
+
+  - name: stg_financeiro
+    description: "Modelo staging com dados limpos e tipados da tabela financeiro."
+    columns:
+      - name: id_financeiro
+        description: "Identificador único do registro financeiro."
+        data_tests:
+          - not_null
+          - unique
+      - name: id_venda
+        description: "Chave estrangeira da venda associada."
+        data_tests:
+          - not_null
+      - name: data_competencia
+        description: "Data de competência do lançamento."
+        data_tests:
+          - not_null
+
+  - name: stg_clima
+    description: "Modelo staging com dados limpos e tipados da tabela de clima."
+    columns:
+      - name: data_clima
+        description: "Data da medição climática."
+        data_tests:
+          - not_null
+          - unique
