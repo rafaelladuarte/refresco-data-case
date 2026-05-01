@@ -1,6 +1,12 @@
 x-airflow-common: &airflow-common
   build: .
   user: "50000:50000"
+  # group_add injeta o GID do grupo 'docker' do host como grupo suplementar.
+  # Verificado em: stat -c '%g' /var/run/docker.sock → 984
+  # Isso permite que o processo airflow (uid 50000) leia/escreva no socket
+  # sem precisar rodar como root ou alterar permissões do socket.
+  group_add:
+    - "984"
   env_file:
     - .env
   environment: &airflow-common-env
@@ -17,6 +23,7 @@ x-airflow-common: &airflow-common
     - ./pipeline:/opt/airflow/pipeline
     - ./logs:/opt/airflow/logs
     - ./data/raw:/opt/airflow/data/raw
+    - /var/run/docker.sock:/var/run/docker.sock
 
   depends_on:
     postgres-airflow:

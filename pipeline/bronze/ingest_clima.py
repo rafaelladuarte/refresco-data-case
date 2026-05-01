@@ -35,30 +35,64 @@ def ensure_bucket_exists(fs, bucket_name):
         logger.error(f"Erro ao verificar bucket: {e}")
         return False
 
-def fetch_weather_data():
+def fetch_weather_data_by_year(year):
+    """Busca dados climáticos para um ano específico"""
     try:
-        logger.info("Consumindo API Open-Meteo...")
-        response = requests.get(API_URL)
+        start_date = f"{year}-01-01"
+        end_date = f"{year}-12-31"
+        
+        params = {
+            "latitude": -21.78,
+            "longitude": -43.35,
+            "start_date": start_date,
+            "end_date": end_date,
+            "daily": "temperature_2m_max,precipitation_sum",
+            "timezone": "America/Sao_Paulo"
+        }
+        
+        logger.info(f"Consumindo API Open-Meteo para o ano {year}...")
+        response = requests.get(API_BASE_URL, params=params)
 
         if response.status_code != 200:
-            logger.error(f"Erro API: {response.status_code}")
+            logger.error(f"Erro API para {year}: {response.status_code}")
             return None
 
         data = response.json()
         daily = data.get("daily")
 
         if not daily:
-            logger.warning("Sem dados retornados")
+            logger.warning(f"Sem dados retornados para {year}")
             return None
 
         df = pd.DataFrame(daily)
-        logger.info(f"Registros: {len(df)}")
+        df["year"] = year  # Adiciona coluna com o ano
+        logger.info(f"Registros para {year}: {len(df)}")
 
         return df
 
     except Exception as e:
-        logger.error(str(e))
+        logger.error(f"Erro ao buscar dados para {year}: {str(e)}")
         return None
+
+def fetch_all_weather_data():
+    """Busca dados para todos os anos de 2020 a 2025"""
+    all_years = range(2020, 2026)  # 2020, 2021, 2022, 2023, 2024, 2025
+    all_data = []
+    
+    for year in all_years:
+        df_year = fetch_weather_data_by_year(year)
+        if df_year is not None and not df_year.empty:
+            all_data.append(df_year)
+    
+    if not all_data:
+        logger.error("Nenhum dado foi obtido para nenhum ano")
+        return None
+    
+    # Combina todos os DataFrames
+    final_df = pd.concat(all_data, ignore_index=True)
+    logger.info(f"Total de registros combinados (2020-2025): {len(final_df)}")
+    
+    return final_df
 
 def save_to_bronze(df):
     if df is None or df.empty:
@@ -74,7 +108,7 @@ def save_to_bronze(df):
         df["_api_source"] = API_BASE_URL
 
         ingestion_dt = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-        path = f"bronze/clima/ingestion_date={ingestion_dt}/clima.csv"
+        path = f"bronze/clima/ingestion_date={ingestion_dt}/clima_2020_2025.csv"
 
         with fs.open(path, 'w') as f:
             df.to_csv(f, index=False)
@@ -91,7 +125,7 @@ def save_to_bronze(df):
         raise
 
 def main():
-    logger.info("Iniciando ingestão clima -> Bronze (MinIO)")
+    logger.info("Iniciando ingestão clima -> Bronze (MinIO) para período 2020-2025")
 
     fs = get_s3_client()
     try:
@@ -101,9 +135,9 @@ def main():
         logger.error(f"[ERRO] Erro ao conectar ao MinIO: {e}")
         raise Exception(f"Falha de conexão com MinIO: {e}")
 
-    df = fetch_weather_data()
+    df = fetch_all_weather_data()
     if df is None or df.empty:
-        raise ValueError("[ERRO] Falha: Nenhum dado de clima retornado pela API.")
+        raise ValueError("[ERRO] Falha: Nenhum dado de clima retornado pela API para o período 2020-2025.")
         
     save_to_bronze(df)
 
