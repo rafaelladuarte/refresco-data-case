@@ -1,0 +1,19 @@
+[theme]
+# ──────────────────────────────────────────────────────────────
+# Tema: Clean & Professional · Light Mode · Soft Red
+# ──────────────────────────────────────────────────────────────
+
+# Cor primária: vermelho suave (botões, sliders, checkboxes, foco)
+primaryColor      = "#E05C6E"
+
+# Fundo principal: branco puro
+backgroundColor   = "#FFFFFF"
+
+# Fundo secundário: off-white levemente rosado (sidebar, inputs, widgets)
+secondaryBackgroundColor = "#FAF1F2"
+
+# Texto: cinza muito escuro para máxima legibilidade
+textColor         = "#1A1A2E"
+
+# Fonte moderna e limpa (disponível via Streamlit runtime)
+font              = "sans serif"
