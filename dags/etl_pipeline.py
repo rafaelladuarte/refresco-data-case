@@ -176,6 +176,14 @@ with DAG(
         **_dbt_common,
     )
 
+    # Passo 4 — executa todas as views do schema gold
+    dbt_run_analytics = DockerOperator(
+        task_id='dbt_run_analytics',
+        command='run --profiles-dir /usr/app/dbt --select marts.analytics',
+        execution_timeout=timedelta(minutes=15),
+        **_dbt_common,
+    )
+
     # =========================================================================
     # GRAFO DE DEPENDÊNCIAS
     #
@@ -207,4 +215,4 @@ with DAG(
     ] >> task_load_to_staging
 
     # dbt: staging → gold → test (cada etapa só roda se a anterior tiver sucesso)
-    task_load_to_staging >> dbt_run_staging >> dbt_run_gold >> dbt_test_gold
+    task_load_to_staging >> dbt_run_staging >> dbt_run_gold >> dbt_test_gold >> dbt_run_analytics
