@@ -12,7 +12,7 @@ import streamlit as st
 from sqlalchemy import create_engine, text
 
 st.set_page_config(
-    page_title="Refresco | Dashboard",
+    page_title="Refresco LTDA | Dashboard",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -163,10 +163,10 @@ PLOT_LAYOUT = dict(
 )
 
 try:
-    df_q1 = run_query("SELECT * FROM gold.vw_Q1_ranking_produto_regiao ORDER BY regiao, ranking")
-    df_q2 = run_query("SELECT * FROM gold.vw_Q2_meta_vs_realizado_canal ORDER BY canal")
-    df_q3 = run_query("SELECT * FROM gold.vw_Q3_tendencia_volume_produto ORDER BY nome_produto, data_completa")
-    df_q4 = run_query("SELECT * FROM gold.vw_Q4_margem_sku ORDER BY margem_bruta_percentual DESC")
+    df_q1 = run_query("SELECT * FROM gold.vw_q1_ranking_vendas ORDER BY regiao, ranking")
+    df_q2 = run_query("SELECT * FROM gold.vw_q2_volume_vs_meta ORDER BY canal")
+    df_q3 = run_query("SELECT * FROM gold.vw_q3_tendencia_volume ORDER BY nome_produto, data_completa")
+    df_q4 = run_query("SELECT * FROM gold.vw_q4_margem_bruta ORDER BY margem_bruta_percentual DESC")
     db_ok = True
 except Exception as exc:
     st.error(f" Falha ao conectar ao banco de dados: `{exc}`")
@@ -194,7 +194,7 @@ with st.sidebar:
     st.caption("Dados: schema `gold` · postgres-gold")
     st.caption("Cache: 5 minutos")
 
-st.markdown("# Dashboard Executivo — Refresco Uberlândia")
+st.markdown("# Dashboard Executivo — Refresco LTDA")
 st.markdown(
     "Visão consolidada de vendas, metas, tendências e rentabilidade "
     "com base na camada **Gold** do Data Warehouse."
