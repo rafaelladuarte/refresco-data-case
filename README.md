@@ -45,6 +45,7 @@ graph TD
 
     %% Nós
     CSV["Arquivos CSV Brutos"] -->|Ingestão| Airflow["Airflow Orchestrator"]
+    API["Open-Meteo"]-->|Ingestão| Airflow
     class CSV source
     class Airflow orchestrator
 
@@ -53,7 +54,7 @@ graph TD
         
         Airflow
         DockerSock["/var/run/docker.sock"]
-        DBT["dbt-core Container (Efêmero)"]
+        DBT["dbt-core"]
         
         subgraph MinIO["Object Storage (MinIO)"]
             Bronze["Camada Bronze (Raw)"]
