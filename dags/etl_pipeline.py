@@ -24,10 +24,15 @@ from pipeline.load.staging import load_to_staging
 # O DockerOperator monta este caminho diretamente do host para o container
 # dbt que ele vai criar.
 # ---------------------------------------------------------------------------
-DBT_PROJECT_HOST_PATH = os.getenv(
-    'DBT_PROJECT_HOST_PATH',
-    '/home/elladarte/Documentos/teste-tecnico-uberlandia-refresco/refresco-data-case/dbt'
-)
+def _require_env(name):
+    """Falha explicitamente se a variável de ambiente obrigatória não existir."""
+    value = os.getenv(name)
+    if not value:
+        raise RuntimeError(f"Variável de ambiente obrigatória não definida: {name}")
+    return value
+
+
+DBT_PROJECT_HOST_PATH = _require_env('DBT_PROJECT_HOST_PATH')
 
 # Nome da rede Docker Compose (prefixo do projeto + nome no YAML)
 DOCKER_NETWORK = os.getenv('DOCKER_NETWORK', 'refresco-data-case_uberlandia-net')
@@ -37,15 +42,15 @@ DBT_IMAGE = 'ghcr.io/dbt-labs/dbt-postgres:1.8.latest'
 
 # Variáveis de ambiente passadas ao container dbt pelo DockerOperator
 DBT_ENV_VARS = {
-    'POSTGRES_USER': os.getenv('POSTGRES_USER', 'uberlandia'),
-    'POSTGRES_PASSWORD': os.getenv('POSTGRES_PASSWORD', 'senha123'),
-    'POSTGRES_DB': os.getenv('POSTGRES_DB', 'gold'),
-    'POSTGRES_HOST': os.getenv('POSTGRES_HOST', 'postgres-gold'),
-    'POSTGRES_PORT': os.getenv('POSTGRES_PORT', '5432'),
+    'POSTGRES_USER': _require_env('POSTGRES_USER'),
+    'POSTGRES_PASSWORD': _require_env('POSTGRES_PASSWORD'),
+    'POSTGRES_DB': _require_env('POSTGRES_DB'),
+    'POSTGRES_HOST': _require_env('POSTGRES_HOST'),
+    'POSTGRES_PORT': _require_env('POSTGRES_PORT'),
 }
 
 default_args = {
-    'owner': 'antigravity',
+    'owner': 'data-engineering',
     'depends_on_past': False,
     'start_date': datetime(2024, 1, 1),
     'retries': 1,
@@ -152,6 +157,14 @@ with DAG(
         mount_tmp_dir=False,
     )
 
+    # Passo 0 — instala pacotes dbt (dbt_packages/ não é mais versionado)
+    dbt_deps = DockerOperator(
+        task_id='dbt_deps',
+        command='deps --profiles-dir /usr/app/dbt',
+        execution_timeout=timedelta(minutes=10),
+        **_dbt_common,
+    )
+
     # Passo 1 — recria as views stg_* no schema load_stage
     dbt_run_staging = DockerOperator(
         task_id='dbt_run_staging',
@@ -215,4 +228,4 @@ with DAG(
     ] >> task_load_to_staging
 
     # dbt: staging → gold → test (cada etapa só roda se a anterior tiver sucesso)
-    task_load_to_staging >> dbt_run_staging >> dbt_run_gold >> dbt_test_gold >> dbt_run_analytics
+    task_load_to_staging >> dbt_deps >> dbt_run_staging >> dbt_run_gold >> dbt_test_gold >> dbt_run_analytics

@@ -17,7 +17,7 @@ def load_to_staging():
     }
     
     pg_user = os.getenv("POSTGRES_USER", "uberlandia")
-    pg_pass = os.getenv("POSTGRES_PASSWORD", "senha123")
+    pg_pass = os.environ["POSTGRES_PASSWORD"]
     pg_host = os.getenv("POSTGRES_HOST", "localhost")
     pg_port = os.getenv("POSTGRES_PORT", "5432")
     pg_db = os.getenv("POSTGRES_DB", "gold")

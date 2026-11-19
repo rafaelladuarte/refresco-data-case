@@ -20,3 +20,9 @@ data/gold/
 Thumbs.db
 
 logs/
+
+# dbt (artefatos gerados)
+dbt/dbt_packages/
+dbt/target/
+dbt/logs/
+dbt/.user.yml
