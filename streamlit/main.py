@@ -131,11 +131,15 @@ st.markdown(
 
 @st.cache_resource(show_spinner="Conectando ao banco de dados...")
 def get_engine():
-    user     = os.getenv("POSTGRES_USER", "postgres")
-    password = os.getenv("POSTGRES_PASSWORD", "postgres")
+    missing = [v for v in ("POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB") if not os.getenv(v)]
+    if missing:
+        st.error(f"Variáveis de ambiente obrigatórias não definidas: {', '.join(missing)}")
+        st.stop()
+    user     = os.environ["POSTGRES_USER"]
+    password = os.environ["POSTGRES_PASSWORD"]
     host     = os.getenv("POSTGRES_HOST", "postgres-gold")
     port     = os.getenv("POSTGRES_PORT", "5432")
-    db       = os.getenv("POSTGRES_DB", "postgres")
+    db       = os.environ["POSTGRES_DB"]
     url      = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{db}"
     return create_engine(url)
 
@@ -259,6 +263,8 @@ else:
         zeroline=False,
         showticklabels=False,
         title_text="",
+        # folga de 15% à direita para o rótulo "outside" da maior barra não ser cortado
+        range=[0, df_q1_plot["total_receita_liquida"].max() * 1.15],
     )
     fig_q1.update_yaxes(
         title_text="",
@@ -271,8 +277,9 @@ st.markdown("---")
 
 st.markdown('<p class="section-title">Q2 — Volume Realizado vs. Meta por Canal</p>', unsafe_allow_html=True)
 st.markdown(
-    '<p class="section-desc">Comparativo entre o volume de caixas efetivamente vendido e a meta projetada '
-    'por canal de distribuição.</p>',
+    '<p class="section-desc">Comparativo entre o volume de caixas efetivamente vendido e a meta '
+    'por canal de distribuição. As metas são fictícias (seed <code>metas_canal_mes</code>), '
+    'pois a base de origem não possui metas; canais sem meta aparecem sem barra de meta.</p>',
     unsafe_allow_html=True,
 )
 
@@ -314,7 +321,7 @@ fig_q2.add_trace(go.Bar(
     x=df_q2["canal"],
     y=df_q2["meta_volume_caixas"],
     marker_color="#ADB5BD",
-    text=df_q2["meta_volume_caixas"].apply(lambda v: f"{v:,.0f}"),
+    text=df_q2["meta_volume_caixas"].apply(lambda v: f"{v:,.0f}" if pd.notna(v) else ""),
     textposition="outside",
 ))
 fig_q2.update_layout(
@@ -473,18 +480,25 @@ with col_chart:
         text=df_q4_sorted["margem_bruta_percentual"].apply(lambda v: f"{v:.1f}%"),
         textposition="outside",
         textfont=dict(color=FONT_COLOR, size=12),
+        cliponaxis=False,  # rótulos "outside" não são recortados pela área do eixo
     ))
     fig_q4.update_layout(
         **PLOT_LAYOUT,
         title="Margem Bruta % por SKU",
-        height=380,
+        # altura proporcional ao número de SKUs para os rótulos não se sobreporem
+        height=max(380, 24 * len(df_q4_sorted)),
     )
+    # folga nas duas pontas: margens podem ser negativas e os rótulos ficam "outside"
+    q4_min = min(df_q4_sorted["margem_bruta_percentual"].min(), 0)
+    q4_max = df_q4_sorted["margem_bruta_percentual"].max()
+    q4_pad = (q4_max - q4_min) * 0.35
     fig_q4.update_xaxes(
         showgrid=False,
         showline=False,
         zeroline=False,
         showticklabels=False,
         title_text="",
+        range=[q4_min - (q4_pad if q4_min < 0 else 0), q4_max + q4_pad],
     )
     fig_q4.update_yaxes(
         title_text="",

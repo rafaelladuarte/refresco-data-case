@@ -10,6 +10,7 @@ WITH vendas_diarias AS (
     JOIN {{ ref('dim_produto') }} p ON f.sk_produto = p.sk_produto
     JOIN {{ ref('dim_tempo') }} t ON f.sk_tempo = t.sk_tempo
     WHERE f.status_financeiro = 'PAGO'
+      AND f.entra_volume           -- regra: seed regra_tipo_lancamento
     GROUP BY p.sk_produto, p.nome_produto, t.data_completa
 ),
 analise AS (

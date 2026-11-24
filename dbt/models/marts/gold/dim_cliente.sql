@@ -18,7 +18,8 @@ select
     id_cliente,
     nome_cliente,
     cnpj,
-    canal,
+    -- Membro desconhecido (Kimball): canal ausente na origem não vira NULL na dimensão
+    coalesce(canal, 'Não informado') as canal,
     cidade,
     uf,
     regiao,

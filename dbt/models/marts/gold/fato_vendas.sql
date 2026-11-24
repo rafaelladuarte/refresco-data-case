@@ -27,6 +27,10 @@ produtos as (
 
 representantes as (
     select * from {{ ref('dim_representante') }}
+),
+
+regras_tipo as (
+    select * from {{ ref('regra_tipo_lancamento') }}
 )
 
 select
@@ -53,6 +57,10 @@ select
     -- ~30% das vendas (921/3375) estão nessa condição, distribuídas uniformemente por mês.
     f.tipo_lancamento,
     f.status_financeiro,
+
+    -- regra de negócio (seed regra_tipo_lancamento); venda sem lançamento não entra
+    coalesce(rt.entra_receita, false) as entra_receita,
+    coalesce(rt.entra_volume, false) as entra_volume,
     
     -- controle
     v.data_emissao,
@@ -72,3 +80,5 @@ left join representantes r
 -- Não usar INNER JOIN aqui; faria sumir ~30% das vendas da fato.
 left join financeiro f 
     on v.id_venda = f.id_venda
+left join regras_tipo rt
+    on f.tipo_lancamento = rt.tipo_lancamento

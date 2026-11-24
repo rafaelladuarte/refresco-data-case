@@ -8,6 +8,10 @@ psycopg2-binary==2.9.9
 
 # Manipulação de dados
 pandas==2.2.1
+# Dependências transitivas fixadas: sem isso o pip instala pyarrow>=16 (exige numpy 2),
+# incompatível com streamlit 1.33 (numpy<2) → ImportError ao renderizar st.dataframe.
+numpy==1.26.4
+pyarrow==15.0.2
 
 # Variáveis de ambiente
 python-dotenv==1.0.1

@@ -6,6 +6,8 @@ from pathlib import Path
 import s3fs
 import io
 
+from pipeline.settings import s3_storage_options
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
@@ -16,14 +18,20 @@ airflow_home = os.getenv("AIRFLOW_HOME", "/opt/airflow")
 LOCAL_RAW_DIR = Path(f"{airflow_home}/data/raw")
 BRONZE_DIR = "bronze"
 
+# Encoding de cada arquivo de origem (contrato da fonte). Somente clientes.csv é
+# ISO-8859-1; os demais são UTF-8. Ler tudo como latin1 corrompia acentos
+# (ex.: "Conveniência" virava "ConveniÃªncia"). A Bronze é sempre gravada em UTF-8.
+SOURCE_ENCODINGS = {
+    "clientes": "latin1",
+    "financeiro": "utf-8",
+    "produtos": "utf-8",
+    "vendas": "utf-8",
+}
+BRONZE_ENCODING = "utf-8"
+
 def get_s3_client():
     """Retorna uma nova instância do cliente S3FileSystem (fork-safe)"""
-    endpoint_url = os.getenv("AIRFLOW__S3__ENDPOINT_URL", "http://localhost:9000")
-    return s3fs.S3FileSystem(
-        key=os.getenv("AWS_ACCESS_KEY_ID", "minio"),
-        secret=os.getenv("AWS_SECRET_ACCESS_KEY", "minio123"),
-        client_kwargs={"endpoint_url": endpoint_url}
-    )
+    return s3fs.S3FileSystem(**s3_storage_options())
 
 def ensure_bucket_exists(fs, bucket_name):
     """Verifica e cria bucket se necessário"""
@@ -59,7 +67,11 @@ def process_table(fs, table_name: str):
     try:
         logger.info(f"Iniciando ingestão da tabela: {table_name}")
         
-        df = pd.read_csv(source_file, encoding="latin1")
+        if table_name not in SOURCE_ENCODINGS:
+            raise ValueError(f"Encoding não definido para a tabela '{table_name}' em SOURCE_ENCODINGS")
+        encoding = SOURCE_ENCODINGS[table_name]
+        df = pd.read_csv(source_file, encoding=encoding)
+        logger.info(f"Encoding de origem: {encoding}")
         logger.info(f"Registros lidos: {len(df)}")
         logger.info(f"Colunas: {list(df.columns)}")
         
@@ -80,9 +92,10 @@ def process_table(fs, table_name: str):
         
         csv_buffer = io.StringIO()
         df.to_csv(csv_buffer, index=False)
-        
-        with fs.open(target_path, 'w') as f:
-            f.write(csv_buffer.getvalue())
+
+        # Grava em modo binário com encoding explícito para não depender do locale do container
+        with fs.open(target_path, 'wb') as f:
+            f.write(csv_buffer.getvalue().encode(BRONZE_ENCODING))
         
         if fs.exists(target_path):
             file_size = fs.size(target_path)
@@ -133,7 +146,8 @@ def list_bronze_files(fs):
                                 info = fs.stat(file)
                                 logger.info(f"{file}")
                                 logger.info(f"- Tamanho: {info['size']} bytes")
-                                logger.info(f"- Modificado: {datetime.fromtimestamp(info['mtime'])}")
+                                # Objetos S3 expõem 'LastModified' (datetime), não 'mtime'
+                                logger.info(f"- Modificado: {info.get('LastModified')}")
                 else:
                     logger.info(f"- Tabela '{table}' ainda não processada")
     except Exception as e:

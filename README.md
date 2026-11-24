@@ -1,291 +1,236 @@
-# 🚀 Refresco Data‑Case – Pipeline ETL Medallion
+# 🚀 Refresco Data-Case: pipeline Medallion de vendas
 
-> Projeto de demonstração de um pipeline **Medallion Architecture** (Bronze → Silver → Gold) construído com **Docker**, **Airflow**, **Python (pandas)** e **dbt‑core**.  
-> O objetivo é transformar arquivos CSV brutos de vendas, clientes, produtos, clima e finanças em um data‑warehouse dimensional pronto para análises de negócio.
+Pipeline de dados **Bronze → Silver → Gold** que transforma arquivos de vendas, clientes, produtos e lançamentos financeiros de uma distribuidora de bebidas do Triângulo Mineiro, mais o clima diário de Uberlândia, em um **data warehouse dimensional** com regras de negócio versionadas, testes de qualidade e um dashboard analítico.
+
+**Stack:** Docker Compose · Apache Airflow 2.9 · Python 3.12 / pandas · MinIO (S3) · PostgreSQL 15 · dbt-core 1.8 · Streamlit
 
 ---
 
 ## 📑 Sumário
 
-1. [Visão Geral](#visão-geral)  
-2. [Arquitetura de Dados (Diagrama)](#arquitetura-de-dados)  
-3. [Modelagem Dimensional (Star Schema)](#modelagem-dimensional)  
-4. [Qualidade e Integridade de Dados](#qualidade-de-dados)  
-5. [Tecnologias & Justificativas](#tecnologias)  
-6. [Como Executar](#como-executar)  
-7. [Estrutura de Diretórios](#estrutura-de-pastas)  
+1. [A aplicação rodando](#-a-aplicação-rodando)
+2. [Arquitetura](#-arquitetura)
+3. [Modelo de dados](#-modelo-de-dados)
+4. [Regras de negócio](#-regras-de-negócio)
+5. [Qualidade de dados](#-qualidade-de-dados)
+6. [Como executar](#-como-executar)
+7. [Estrutura do repositório](#-estrutura-do-repositório)
+8. [Limitações conhecidas](#-limitações-conhecidas)
+9. [Roadmap](#-roadmap)
 
 ---
 
-## 🌟 Visão Geral <a name="visão-geral"></a>
+## 📸 A aplicação rodando
 
-- **Domínio:** Vendas de refrescos em Uberlândia (clientes, produtos, representantes, clima).  
-- **Camadas:**  
-  - **Bronze:** Arquivos CSV armazenados em *MinIO* (raw).  
-  - **Silver:** Scripts Python limpam, normalizam IDs e tratam registros órfãos → Parquet.  
-  - **Gold:** dbt materializa um **Star Schema** no PostgreSQL (`schema: gold`).  
-- **Diferencial:** Tratamento de registros órfãos com **alertas `warn`** no dbt, permitindo auditoria sem interrupção do fluxo.
+Capturas da validação final da Sprint 1, em um ambiente recriado do zero (`docker compose down -v`).
+
+**Airflow: DAG `dag_etl_pipeline` com as 14 tasks concluídas.** Bronze e Silver rodam com `PythonOperator`; o dbt roda em containers efêmeros via `DockerOperator`.
+
+![DAG no Airflow: grafo de tasks](docs/images/airflow_dag_graph.png)
+
+![DAG no Airflow: histórico de execuções](docs/images/airflow_dag_grid.png)
+
+**Dashboard Streamlit: Q1 (ranking por região) e Q2 (volume vs. meta por canal; metas fictícias).**
+
+![Dashboard: Q1 e Q2](docs/images/dashboard_q1_q2.png)
+
+**Dashboard Streamlit: Q3 (tendência com média móvel de 7 dias) e Q4 (margem bruta por SKU).**
+
+![Dashboard: Q3 e Q4](docs/images/dashboard_q3_q4.png)
+
+> Na Q4, `Del Valle Pêssego` e `Burn Energy` aparecem com margem de 100% porque a origem traz `custo_unitario = 0.00`. O problema foi identificado na validação e está no backlog (card DQ-09).
 
 ---
 
-## 🏗️ Arquitetura de Dados <a name="arquitetura-de-dados"></a>
+## 🏗️ Arquitetura
 
 ```mermaid
-graph TD
-    %% Estilos - Tema Profissional
-    classDef default fill:#f8f9fa,stroke:#343a40,stroke-width:1px
-    classDef source fill:#d1ecf1,stroke:#0c5460,stroke-width:2px,color:#0c5460
-    classDef orchestrator fill:#fff3cd,stroke:#856404,stroke-width:2px,color:#856404
-    classDef storage fill:#d4edda,stroke:#155724,stroke-width:2px,color:#155724
-    classDef warehouse fill:#e2d5f1,stroke:#4a235a,stroke-width:2px,color:#4a235a
-    classDef compute fill:#f8d7da,stroke:#721c24,stroke-width:2px,color:#721c24
-    classDef socket fill:#e2e3e5,stroke:#383d41,stroke-width:1.5px,stroke-dasharray:4 2
-    classDef analytics fill:#ffe6f0,stroke:#d63384,stroke-width:2px,color:#d63384
-    classDef visualization fill:#d5f4e6,stroke:#198754,stroke-width:2px,color:#198754
+flowchart LR
+    CSV["CSVs<br/>(data/raw)"] --> AF
+    API["Open-Meteo<br/>Archive API"] --> AF
 
-    %% Nós
-    CSV["Arquivos CSV Brutos"] -->|Ingestão| Airflow["Airflow Orchestrator"]
-    API["Open-Meteo"]-->|Ingestão| Airflow
-    class CSV source
-    class Airflow orchestrator
-
-    subgraph Docker["Ambiente Docker"]
-        direction TB
-        
-        Airflow
-        DockerSock["/var/run/docker.sock"]
-        DBT["dbt-core"]
-        
-        subgraph MinIO["Object Storage (MinIO)"]
-            Bronze["Camada Bronze (Raw)"]
-            Silver["Camada Silver (Parquet)"]
+    subgraph Docker["Docker Compose · rede uberlandia-net"]
+        AF["Airflow<br/>dag_etl_pipeline"]
+        subgraph MinIO["MinIO (S3)"]
+            BR["bronze<br/>CSV UTF-8"]
+            SV["silver<br/>Parquet + _quarentena"]
         end
-        
-        subgraph PostgreSQL["PostgreSQL DWH"]
-            LoadStage["Schema: load_stage"]
-            Gold["Schema: gold"]
+        subgraph PG["PostgreSQL · postgres-gold"]
+            LS["load_stage<br/>+ views stg_*"]
+            GD["gold<br/>star schema + seeds + vw_q*"]
         end
-        
-        subgraph Streamlit["Streamlit Analytics"]
-            Dashboard["Dashboard Interativo<br/>Gráficos e Métricas"]
-            APILayer["API Layer<br/>(Altair/Plotly)"]
-        end
+        DBT["dbt (container efêmero<br/>via DockerOperator)"]
+        ST["Streamlit"]
     end
 
-    %% Fluxo da Pipeline
-    Airflow -->|Pandas/S3FS| Bronze
-    Bronze -->|Validação| Silver
-    Silver -->|Carga Inicial| LoadStage
-    Airflow -->|DockerOperator| DockerSock
-    DockerSock -->|Executa| DBT
-    DBT -->|Lê dados| LoadStage
-    DBT -->|Transforma| Gold
-    
-    %% Fluxo de Disponibilização
-    Gold -->|Consulta SQL| APILayer
-    APILayer -->|Renderiza| Dashboard
-    Dashboard ==>|Visualização| Usuario["👤 Usuário Final"]
-
-    %% Aplicando estilos dos subgráficos
-    style Docker fill:#e9ecef,stroke:#495057,stroke-width:2px
-    style MinIO fill:#d4edda,stroke:#28a745,stroke-width:2px
-    style PostgreSQL fill:#cfe2ff,stroke:#0d6efd,stroke-width:2px
-    style Streamlit fill:#ffe6f0,stroke:#d63384,stroke-width:2px
-    
-    class DockerSock socket
-    class DBT compute
-    class Bronze,Silver storage
-    class LoadStage,Gold warehouse
-    class APILayer analytics
-    class Dashboard visualization
+    AF -->|PythonOperator| BR --> SV -->|load_to_staging| LS
+    AF -->|docker.sock| DBT
+    DBT -->|staging → gold → testes → views| GD
+    LS --> DBT
+    GD --> ST --> U["👤 Usuário"]
 ```
 
-### Descrição dos componentes
+| Camada | Responsabilidade |
+|---|---|
+| **Bronze** | Cópia fiel da origem no MinIO, lida com o encoding declarado de cada fonte e gravada em UTF-8, com metadados de linhagem (`_ingested_at`, `_source_file`). |
+| **Silver** | Tipagem, nulos tratados, padronização de domínios, deduplicação determinística e validação. Registros rejeitados vão para `silver/_quarentena/` com o motivo. |
+| **Gold** | dbt: views `stg_*`, star schema, seeds de regras de negócio, 65 testes de dados e 4 views analíticas. |
 
-| Componente | Função | Comentário |
-|------------|--------|------------|
-| **Arquivos CSV** | Fonte de dados brutos (vendas, clientes, produtos, clima, finanças). | Montados como objetos no MinIO. |
-| **Airflow** | Orquestrador de tarefas. Executa scripts Python (Bronze → Silver) e `DockerOperator` para dbt. | Usuário `airflow` com acesso ao `docker.sock` via `group_add`. |
-| **MinIO** | Storage S3‑compatible. Guarda a camada Bronze (raw) e Silver (Parquet). | Simula bucket S3 local. |
-| **PostgreSQL** | Data‑warehouse relacional. | Dois schemas: `load_stage` (staging) e `gold` (dimensional). |
-| **dbt‑core** | Container efêmero criado por Airflow. Compila e executa modelos dbt (staging → gold). | Isolado, sem dependência de daemon persistente. |
-| **docker.sock** | Canal de comunicação entre Airflow e Docker daemon (necessário ao usar `DockerOperator`). | Montado como volume read‑only. |
+Detalhes de componentes, DAG e modelo: **[docs/arquitetura_dados.md](docs/arquitetura_dados.md)**.
 
 ---
 
-## 📊 Modelagem Dimensional (Star Schema) <a name="modelagem-dimensional"></a>
+## 📊 Modelo de dados
 
-```mermaid
-erDiagram
-    fato_vendas {
-        int sk_venda PK
-        varchar id_venda
-        int sk_cliente FK
-        int sk_produto FK
-        int sk_representante FK
-        int sk_tempo FK
-        numeric qtd_caixas
-        numeric preco_unitario
-        numeric desconto_pct
-        numeric receita_bruta
-        numeric receita_liquida
-        numeric custo_total
-        numeric margem_bruta
-        varchar tipo_lancamento
-        varchar status_financeiro
-    }
+Star schema no schema `gold`:
 
-    dim_cliente {
-        int sk_cliente PK
-        varchar id_cliente
-        varchar nome_cliente
-        varchar canal
-        varchar regiao
-        varchar cidade
-        varchar uf
-        boolean ativo
-    }
+| Tabela | Grão | Destaques |
+|---|---|---|
+| `fato_vendas` | 1 linha por venda | medidas (`qtd_caixas`, `receita_liquida`, `custo_total`, `margem_bruta`), status e tipo do lançamento, flags `entra_receita`/`entra_volume`; incremental por `id_venda` |
+| `dim_cliente` | 1 por cliente | SCD1; canal ausente → `Não informado` |
+| `dim_produto` | 1 por produto | família, marca, embalagem, preço e custo |
+| `dim_representante` | 1 por (representante, canal) | derivada das vendas |
+| `dim_tempo` | 1 por dia (2020–2030) | calendário PT-BR, dia útil, **clima diário** e agregados mensais |
+| `regra_tipo_lancamento` *(seed)* | 1 por tipo | regra de receita e volume |
+| `metas_canal_mes` *(seed)* | canal × mês | metas **fictícias** |
 
-    dim_produto {
-        int sk_produto PK
-        varchar id_produto
-        varchar nome_produto
-        varchar familia
-        varchar marca
-        varchar embalagem
-        numeric volume_ml
-        numeric preco_tabela
-        numeric custo_unitario
-    }
+O diagrama ER completo está em [docs/arquitetura_dados.md](docs/arquitetura_dados.md#4-modelo-dimensional-schema-gold).
 
-    dim_tempo {
-        int sk_tempo PK
-        date data_referencia
-        int ano
-        int mes
-        int dia
-        varchar dia_semana
-        numeric clima_temp_max
-        numeric clima_precipitacao
-    }
-
-    dim_representante {
-        int sk_representante PK
-        varchar id_representante
-        varchar nome_representante
-        varchar canal_venda
-    }
-
-    fato_vendas }|--|| dim_cliente : "possui"
-    fato_vendas }|--|| dim_produto : "contém"
-    fato_vendas }|--|| dim_tempo : "ocorre em"
-    fato_vendas }|--|| dim_representante : "realizada por"
-```
-
-### Principais colunas
-
-| Tabela | Campo | Tipo | Comentário |
-|--------|-------|------|------------|
-| **fato_vendas** | `sk_venda` | `int` (surrogate) | PK da linha de fato |
-| | `sk_cliente` | `int` (FK) | Referência `dim_cliente` |
-| | `sk_produto` | `int` (FK) | Referência `dim_produto` |
-| | `sk_representante` | `int` (FK) | Referência `dim_representante` |
-| | `sk_tempo` | `int` (FK) | Referência `dim_tempo` |
-| | `qtd_caixas` | `numeric` | Quantidade física vendida |
-| | `receita_liquida` | `numeric` | Receita após descontos |
-| **dim_cliente** | `id_cliente` | `varchar(10)` | Código cliente (ex.: `C0001`) |
-| | `ativo` | `boolean` | Marca cliente ainda em operação |
-| **dim_produto** | `id_produto` | `varchar(8)` | Código SKU (ex.: `P001`) |
-| | `volume_ml` | `numeric` | Volume da embalagem |
-| **dim_tempo** | `data_referencia` | `date` | Data da venda |
-| | `clima_temp_max` | `numeric` | Temperatura máxima (°C) – pode ser NULL se ausente |
-| | `clima_precipitacao` | `numeric` | Precipitação (mm) – pode ser NULL |
-| **dim_representante** | `id_representante` | `varchar(6)` | Código interno do representante |
+**Views analíticas** (consumidas pelo dashboard): `vw_q1_ranking_vendas` (top 10 produtos por região), `vw_q2_volume_vs_meta`, `vw_q3_tendencia_volume` (média móvel de 7 dias) e `vw_q4_margem_bruta`.
 
 ---
 
-## 🛠️ Qualidade de Dados <a name="qualidade-de-dados"></a>
+## 📐 Regras de negócio
 
-- **Referencial (Silver → Dimensões):**  
-  - Scripts `clean_clientes.py`, `clean_produtos.py`, `clean_vendas.py` validam IDs via *regex* (`^C\d{4}$`, `^P\d{3}$`).  
-  - Registros com IDs inválidos ou nulos são enviados para *quarentena* em `s3://silver/_quarentena/`.  
+Cada venda tem no máximo um lançamento financeiro, então o **tipo do lançamento classifica a venda**. A regra fica no seed `dbt/seeds/regra_tipo_lancamento.csv` e as views usam as flags, sem listar tipos em SQL:
 
-- **dbt Tests (Gold):**  
-  - `tests` definem `relationships` (FK) com **severity: warn** – registros órfãos são marcados mas não interrompem o run.  
-  - `accepted_values`, `not_null` e `unique` garantem consistência de chaves e tipos.  
+| Tipo | Receita | Volume | Por quê |
+|---|:---:|:---:|---|
+| VENDA | ✅ | ✅ | Venda faturada |
+| BONIFICACAO | ❌ | ✅ | Entregue sem cobrança: entra em volume e custo, não em receita |
+| DEVOLUCAO | ❌ | ❌ | Venda desfeita |
+| AJUSTE / OUTRO | ❌ | ❌ | Sem operação comercial |
 
-- **Monitoramento:**  
-  - Logs de Airflow gravam o número de linhas rejeitadas e o caminho da quarentena.  
-  - Métricas de qualidade podem ser visualizadas via a camada **Streamlit** (opcional) ou consultas diretas nas tabelas de quarentena.
+- Todas as views consideram apenas `status_financeiro = 'PAGO'`.
+- **Margem bruta** = receita de VENDA − custo de VENDA e BONIFICACAO.
+- **Metas (Q2):** ⚠️ os valores de `dbt/seeds/metas_canal_mes.csv` são **fictícios**, porque a base de origem não possui metas. Eles são fixos e independentes do realizado. Uma meta calculada a partir do próprio realizado tornaria o atingimento circular.
 
----
-
-## 🧩 Tecnologias & Justificativas <a name="tecnologias"></a>
-
-| Camada | Tecnologia | Por quê? |
-|--------|------------|----------|
-| **Containers** | Docker Compose (Airflow, dbt‑core, PostgreSQL, MinIO) | Isolamento, replicabilidade e fácil provisionamento. |
-| **Orquestração** | Apache Airflow 2.x | Scheduler robusto, suporte nativo a `DockerOperator`. |
-| **Transformação** | dbt‑core (Postgres) | Modelagem declarativa, testes de qualidade, versionamento de SQL. |
-| **Ingestão / Limpeza** | Python 3.12 + pandas | Flexibilidade para tratamento avançado (regex, quarentena). |
-| **Armazenamento** | MinIO (S3‑compatible) | Simula bucket S3 local; ideal para testes. |
-| **DW** | PostgreSQL 15 | Suporte completo a esquemas, MV e tipos avançados. |
-| **Arquitetura** | Medallion (Bronze‑Silver‑Gold) | Separação clara de responsabilidade, rastreabilidade e governança. |
+Justificativas completas, no formato ADR: **[docs/decisoes_tratamento.md](docs/decisoes_tratamento.md)**.
 
 ---
 
-## 🚀 Como Executar <a name="como-executar"></a>
+## 🛡️ Qualidade de dados
+
+**Princípio: nada é descartado em silêncio.** Todo registro rejeitado vai para a quarentena com o motivo legível.
+
+| Entidade | Regras na Silver | Quarentena |
+|---|---|---|
+| Clientes | `id_cliente` no padrão `C9999`; `cnpj` e nome obrigatórios; 1 registro por `id_cliente`; CNPJ duplicado mantém o menor id | `silver/_quarentena/clientes/` |
+| Vendas | `id_venda` obrigatório; data válida (4 formatos aceitos); `qtd_caixas > 0`; `preco_unitario > 0`; `0 ≤ desconto_pct < 1`; cliente e produto existentes no cadastro | `silver/_quarentena/vendas/` |
+| Produtos | `id_produto` no padrão `P999` | apenas log (quarentena genérica no backlog, card ARQ-05) |
+| Financeiro | tipos e status mapeados para domínios fixos | — |
+
+Na última execução de referência, **3.482 vendas** chegaram à fato. A quarentena ficou com 18 vendas (6 com quantidade negativa, 3 com desconto ≥ 100%, 5 sem cliente e 4 com produto inválido) e 5 recadastros de clientes.
+
+**Testes dbt (65):**
+- Unicidade e `not_null` de chaves.
+- `relationships` da fato com as dimensões e com o seed de regras: um tipo de lançamento novo sem regra quebra o build.
+- Faixas de medidas em `stg_vendas`, como defesa em profundidade.
+- Testes dos seeds.
+- Teste singular `assert_clima_cobre_dias_com_venda`.
+
+---
+
+## 🚀 Como executar
+
+**Pré-requisitos:** Docker e Docker Compose v2, Linux ou macOS (usa `/var/run/docker.sock`).
 
 ```bash
-# 1️⃣ Clone o repositório
-git clone <repo-url>
-cd refresco-data-case
+# 1. Configuração
+cp .env.example .env
+#    Preencha todos os valores <...> do .env:
+#    - senhas (MinIO exige 8+ caracteres) e AIRFLOW_FERNET_KEY:
+#        python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+#    - DOCKER_GID:            stat -c '%g' /var/run/docker.sock
+#    - DBT_PROJECT_HOST_PATH: caminho ABSOLUTO da pasta dbt/ deste repositório
 
-# 2️⃣ Construa as imagens (Dockerfile já inclui provider Docker)
-docker compose build --no-cache
+# 2. Build e subida (o airflow-init migra o banco e cria o usuário admin)
+docker compose up -d --build
 
-# 3️⃣ Inicie toda a stack
-docker compose up -d
-
-# 4️⃣ Inicialize o banco (executa migrations do Airflow)
-docker compose exec airflow-webserver airflow db init
-
-# 5️⃣ Verifique o UI do Airflow (http://localhost:8080) e acione a DAG `dag_etl_pipeline`
-#    – A DAG realizará: ingest → silver → load_stage → dbt (staging → gold) → testes.
-
-# 6️⃣ (Opcional) Acesse o pgAdmin (http://localhost:5050) para explorar schemas `load_stage` e `gold`.
+# 3. Rodar o pipeline
+#    Airflow: http://localhost:8080 (AIRFLOW_ADMIN_USER / AIRFLOW_ADMIN_PASSWORD)
+#    Ative e dispare a DAG `dag_etl_pipeline`
 ```
 
-> **Obs.:** O usuário `airflow` possui acesso ao socket Docker via `group_add: ["984"]` (GID do grupo *docker* no host). Caso seu host possua outro GID, ajuste o `docker-compose.yml` accordingly.
+| Serviço | URL |
+|---|---|
+| Airflow | http://localhost:8080 |
+| Dashboard Streamlit | http://localhost:8501 (disponível após a primeira execução da DAG) |
+| MinIO Console | http://localhost:9001 |
+| pgAdmin | http://localhost:5050 |
+| PostgreSQL Gold | `localhost:5432` (banco `POSTGRES_DB`) |
+
+> **Atualizando um ambiente antigo.** Se você já tinha o ambiente rodando antes da Sprint 1, as credenciais e o volume do MinIO mudaram. Recrie os volumes com `docker compose down -v`. Isso apaga os dados locais, que se recriam rodando a DAG. Se preferir manter os volumes, a `fato_vendas` (incremental) ganhou colunas e precisa de um `dbt run --full-refresh --select fato_vendas`.
 
 ---
 
-## 📁 Estrutura de Pastas <a name="estrutura-de-pastas"></a>
+## 📁 Estrutura do repositório
 
 ```
 refresco-data-case/
-├─ .env                     # Variáveis de ambiente (Postgres, MinIO, Airflow)
-├─ docker-compose.yml       # Orquestração dos containers
-├─ Dockerfile               # Imagem personalizada do Airflow (inclui provider Docker)
-├─ dbt/
-│   ├─ models/
-│   │   ├─ staging/         # Views stg_*
-│   │   └─ marts/
-│   │       └─ gold/        # Dimensões e fato
-│   ├─ profiles.yml         # Conexão ao PostgreSQL
-│   └─ dbt_project.yml      # Configurações de schemas + materializações
-├─ pipeline/
-│   ├─ bronze/              # Scripts de ingestão de CSVs
-│   └─ silver/              # Scripts clean_*.py (validação, quarentena)
-├─ dags/
-│   └─ etl_pipeline.py      # DAG Airflow com DockerOperator
-├─ docs/
-│   ├─ arquitetura_dados.md # Diagrama de arquitetura (Mermaid) – usado aqui
-│   └─ sql/
-│       └─ gold/
-│           ├─ questoes.sql # Queries de exemplo (Q1‑Q4)
-│           └─ perguntas.sql
-└─ logs/                    # Logs de Airflow (montados no container)
+├── dags/etl_pipeline.py          # DAG do Airflow (Python + DockerOperator para o dbt)
+├── pipeline/
+│   ├── settings.py               # Configuração e credenciais via ambiente
+│   ├── bronze/                   # ingest_csv.py, ingest_clima.py
+│   ├── silver/                   # clean_*.py, text.py (validação, dedup, quarentena)
+│   └── load/staging.py           # Silver → load_stage (PostgreSQL)
+├── dbt/
+│   ├── models/staging/           # Views stg_* (cast e renomeação) + testes
+│   ├── models/marts/gold/        # dim_*, fato_vendas + testes
+│   ├── models/marts/analytics/   # vw_q1..vw_q4
+│   ├── seeds/                    # regra_tipo_lancamento, metas_canal_mes (fictícias)
+│   ├── tests/                    # Testes singulares
+│   └── macros/                   # generate_schema_name
+├── streamlit/                    # Dashboard (imagem própria)
+├── data/raw/                     # CSVs de origem
+├── notebooks/exploration/        # Exploração e prototipação da limpeza
+├── docs/
+│   ├── arquitetura_dados.md      # Componentes, DAG, ER e testes
+│   ├── decisoes_tratamento.md    # ADRs das decisões de dados
+│   ├── diagnostico_orfaos_silver.md  # Diagnóstico histórico (resolvido)
+│   ├── backlog/SPRINT-01.md      # Plano e resultados da Sprint 1
+│   └── sql/                      # Consultas exploratórias (legado, fora do pipeline)
+├── BACKLOG.md                    # Quadro Kanban de melhorias
+├── docker-compose.yml
+├── Dockerfile                    # Airflow 2.9.0 / Python 3.12 + constraints oficial
+├── requirements.txt              # Runtime da imagem do Airflow (versões fixas)
+├── requirements-dev.txt          # Testes e notebooks
+└── .env.example
 ```
 
+---
 
+## ⚠️ Limitações conhecidas
+
+Limitações assumidas conscientemente, com o card correspondente no [BACKLOG](BACKLOG.md):
+
+| Limitação | Impacto | Card |
+|---|---|---|
+| Cada execução reprocessa toda a Bronze (partição por timestamp, sem `logical_date`) | O custo cresce a cada execução; sem backfill | ARQ-01 |
+| A Silver é sobrescrita com `rm` + `write`, sem atomicidade | Uma falha no meio deixa a Silver parcial | ARQ-02 |
+| A carga usa `DROP TABLE ... CASCADE` e tipos inferidos pelo pandas | Força recriar as views `stg_*` a cada execução | ARQ-03 |
+| O incremental da fato filtra por `data_emissao` | Status financeiro atualizado depois não é reprocessado | MOD-01 |
+| Sem testes unitários Python e sem CI | Validação manual e pelos testes dbt | ENG-02, ENG-03 |
+| Execuções simultâneas corromperiam a Silver (`rm` + escrita) | Mitigado com `max_active_runs=1`; a correção estrutural é a escrita atômica | ARQ-01, ARQ-02 |
+| `custo_unitario = 0` na origem para 2 produtos, sem validação | Margem de 100% na Q4 para esses SKUs | DQ-09 |
+| As metas são fictícias e os dados são sintéticos, com tipos de lançamento uniformes | Números ilustrativos, não comerciais | — |
+| Clima de uma única coordenada (Uberlândia) para 4 mesorregiões | Correlação clima × vendas aproximada | backlog |
+| `docker.sock` montado no Airflow | Equivale a acesso root no host; aceitável só em ambiente local | — |
+| `bitnamilegacy/minio` é uma imagem congelada (a `minio/minio` deixou de ser pública) | Sem atualizações de segurança | — |
+
+---
+
+## 🗺️ Roadmap
+
+- **Sprint 1 (concluída em 24/11/2026):** qualidade de dados, regras de negócio, reprodutibilidade e documentação. Plano e resultados em [docs/backlog/SPRINT-01.md](docs/backlog/SPRINT-01.md).
+- **Próximas sprints:** testes unitários e CI, ingestão idempotente por `logical_date`, escrita atômica, incremental com merge e auditoria de qualidade. Detalhes no [BACKLOG.md](BACKLOG.md).

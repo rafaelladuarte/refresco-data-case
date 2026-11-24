@@ -1,0 +1,8 @@
+# Dependências de desenvolvimento local (testes e notebooks de exploração).
+# Não são instaladas na imagem do Airflow.
+pandas==2.1.4
+pyarrow==15.0.2
+s3fs==2023.12.2
+python-dotenv==1.0.1
+pytest==8.3.4
+ipykernel==6.29.5

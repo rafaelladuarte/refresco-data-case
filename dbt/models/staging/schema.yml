@@ -13,6 +13,11 @@ sources:
 models:
   - name: stg_vendas
     description: "Modelo staging com dados limpos e tipados da tabela de vendas."
+    # Defesa em profundidade: as mesmas regras são aplicadas na Silver (clean_vendas.py).
+    # Se a validação em Python regredir, o build do dbt falha aqui.
+    data_tests:
+      - dbt_utils.expression_is_true:
+          expression: "desconto_pct >= 0 and desconto_pct < 1"
     columns:
       - name: id_venda
         description: "Identificador único da venda."
@@ -32,6 +37,19 @@ models:
           - not_null
       - name: qtd_caixas
         description: "Quantidade de caixas vendidas."
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 1
+      - name: preco_unitario
+        description: "Preço unitário praticado."
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: false
+      - name: desconto_pct
+        description: "Desconto em fração (0 a 1, exclusivo em 1)."
         data_tests:
           - not_null
 

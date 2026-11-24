@@ -1,0 +1,40 @@
+version: 2
+
+seeds:
+  - name: metas_canal_mes
+    description: >
+      Metas mensais de volume (caixas) por canal. ATENÇÃO: valores FICTÍCIOS, definidos
+      para demonstração, pois o dataset de origem não possui metas. São fixos e não
+      derivados do realizado (meta derivada do realizado torna o atingimento circular).
+    config:
+      column_types:
+        canal: text
+        ano: integer
+        mes: integer
+        meta_volume_caixas: numeric(12,2)
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: ['canal', 'ano', 'mes']
+    columns:
+      - name: canal
+        description: "Canal do cliente (deve existir em dim_cliente.canal)."
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_cliente')
+              field: canal
+      - name: ano
+        data_tests:
+          - not_null
+      - name: mes
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 1
+              max_value: 12
+      - name: meta_volume_caixas
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: false

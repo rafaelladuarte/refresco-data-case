@@ -1,14 +1,12 @@
 /*
-  dim_tempo — comportamento esperado de NULL nas colunas de clima:
+  dim_tempo — calendário diário (2020-01-01 → 2030-12-31, 4018 dias) enriquecido com clima.
 
-  A série de datas cobre 2020-01-01 → 2030-12-31 (4018 dias).
-  load_stage.clima contém dados apenas do ano de 2024 (366 dias, ano bissexto).
-  O LEFT JOIN por (ano, mes) retorna NULL para todos os dias fora desse período —
-  esse é o comportamento correto dado o escopo atual da ingestão climática.
-
-  Quando a ingestão de clima for ampliada para outros anos, as colunas
-  clima_temp_max e clima_precipitacao serão preenchidas automaticamente
-  sem nenhuma alteração neste modelo.
+  Clima:
+    - clima_temp_max / clima_precipitacao: valores DO DIA (join por data).
+    - *_mes: agregados do mês, repetidos em cada dia do mês, para análises mensais
+      sem precisar reagregar na consulta.
+    - Dias fora do período ingerido (CLIMA_ANO_INICIO..CLIMA_ANO_FIM, padrão 2020–2025)
+      ficam com clima NULL. O LEFT JOIN é intencional: o calendário não depende do clima.
 */
 with date_series as (
     select generate_series(
@@ -37,41 +35,43 @@ dim_dates as (
             when 4 then 'Quinta-feira' when 5 then 'Sexta-feira' when 6 then 'Sábado'
             when 7 then 'Domingo'
         end as dia_semana,
-        case 
-            when extract(isodow from data_completa) in (6, 7) then false 
-            else true 
+        case
+            when extract(isodow from data_completa) in (6, 7) then false
+            else true
         end as is_dia_util
     from date_series
 ),
 
--- Agrega clima por ano+mês para fazer o join diário na dim_dates.
--- ano_clima e mes_clima são inteiros derivados em stg_clima via CAST
--- das colunas text `ano` e `mes` presentes em load_stage.clima.
-clima_agg as (
+clima_diario as (
     select
-        ano_clima,
-        mes_clima,
-        avg(temperatura_maxima) as clima_temp_max,
-        sum(precipitacao_total) as clima_precipitacao
+        cast(data_clima as date) as data_clima,
+        temperatura_maxima,
+        precipitacao_total
     from {{ ref('stg_clima') }}
-    group by ano_clima, mes_clima
+),
+
+dim_com_clima as (
+    select
+        d.*,
+        c.temperatura_maxima as clima_temp_max,
+        c.precipitacao_total as clima_precipitacao
+    from dim_dates d
+    left join clima_diario c
+        on d.data_completa = c.data_clima
 )
 
 select
-    d.sk_tempo,
-    d.data_completa,
-    d.ano,
-    d.mes,
-    d.dia,
-    d.trimestre,
-    d.nome_mes,
-    d.dia_semana,
-    d.is_dia_util,
-    cast(c.clima_temp_max as numeric(5,2)) as clima_temp_max,
-    cast(c.clima_precipitacao as numeric(5,2)) as clima_precipitacao
-from dim_dates d
--- LEFT JOIN intencional: dias sem cobertura climática recebem NULL.
--- Atualmente apenas 2024 tem dados; anos fora desse intervalo → NULL esperado.
-left join clima_agg c 
-    on d.ano = c.ano_clima 
-    and d.mes = c.mes_clima
+    sk_tempo,
+    data_completa,
+    ano,
+    mes,
+    dia,
+    trimestre,
+    nome_mes,
+    dia_semana,
+    is_dia_util,
+    cast(clima_temp_max as numeric(5,2)) as clima_temp_max,
+    cast(clima_precipitacao as numeric(6,2)) as clima_precipitacao,
+    cast(avg(clima_temp_max) over (partition by ano, mes) as numeric(5,2)) as clima_temp_max_media_mes,
+    cast(sum(clima_precipitacao) over (partition by ano, mes) as numeric(7,2)) as clima_precipitacao_total_mes
+from dim_com_clima

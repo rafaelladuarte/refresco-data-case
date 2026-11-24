@@ -2,7 +2,7 @@ version: 2
 
 models:
   - name: dim_tempo
-    description: "Dimensão de tempo gerada automaticamente, com dados de clima agregados por mês."
+    description: "Calendário diário (2020-01-01 a 2030-12-31) com clima diário de Uberlândia e agregados mensais."
     columns:
       - name: sk_tempo
         description: "Chave primária no formato YYYYMMDD (inteiro)."
@@ -16,21 +16,25 @@ models:
       - name: mes
         description: "Mês (1 a 12)."
       - name: clima_temp_max
-        description: "Média da temperatura máxima do mês correspondente. NULL para datas fora do período com dados climáticos (atualmente apenas 2024)."
+        description: "Temperatura máxima do dia (°C). NULL para dias fora do período de clima ingerido (padrão 2020–2025)."
         data_tests:
+          # 4018 dias no calendário; 2192 com clima no período padrão → 1826 NULLs esperados.
+          # Alerta se a cobertura cair; erro se nenhum dia tiver clima.
           - not_null:
               config:
-                severity: warn
-                error_if: ">4018"   # falha só se 100% forem NULL (sem dados de clima algum)
-                warn_if: ">3653"    # alerta se mais de 2024 estiver sem dados
+                warn_if: ">1826"
+                error_if: ">4017"
       - name: clima_precipitacao
-        description: "Soma da precipitação do mês correspondente. NULL para datas fora do período com dados climáticos (atualmente apenas 2024)."
+        description: "Precipitação do dia (mm). NULL para dias fora do período de clima ingerido."
         data_tests:
           - not_null:
               config:
-                severity: warn
-                error_if: ">4018"
-                warn_if: ">3653"
+                warn_if: ">1826"
+                error_if: ">4017"
+      - name: clima_temp_max_media_mes
+        description: "Média das temperaturas máximas diárias do mês (repetida em cada dia do mês)."
+      - name: clima_precipitacao_total_mes
+        description: "Precipitação acumulada no mês (repetida em cada dia do mês)."
 
   - name: dim_cliente
     description: "Dimensão de clientes utilizando SCD Tipo 1 (mantendo o registro mais atual)."
@@ -42,6 +46,10 @@ models:
           - not_null
       - name: id_cliente
         description: "Chave natural vinda da origem."
+        data_tests:
+          - not_null
+      - name: canal
+        description: "Canal do cliente. Ausente na origem → 'Não informado' (membro desconhecido)."
         data_tests:
           - not_null
 
@@ -129,13 +137,22 @@ models:
       - name: tipo_lancamento
         description: "Tipo do lançamento financeiro. NULL quando a venda ainda não possui registro em stg_financeiro (comportamento esperado — venda pendente)."
         data_tests:
-          - accepted_values:
-              values: ['VENDA', 'BONIFICACAO', 'DEVOLUCAO', 'AJUSTE', 'OUTRO']
-              # accepted_values ignora NULL por padrão no dbt — NULLs não são testados aqui.
-              # Se um novo tipo aparecer na ingestão sem estar nessa lista, o teste falha.
+          # Fonte única dos tipos válidos: seed regra_tipo_lancamento. Um tipo novo sem
+          # regra definida falha aqui (NULL é ignorado — venda sem lançamento).
+          - relationships:
+              to: ref('regra_tipo_lancamento')
+              field: tipo_lancamento
       - name: status_financeiro
         description: "Status do lançamento financeiro. NULL quando a venda ainda não possui registro em stg_financeiro (comportamento esperado — venda pendente)."
         data_tests:
           - accepted_values:
               values: ['PAGO', 'PENDENTE', 'CANCELADO']
               # accepted_values ignora NULL por padrão no dbt.
+      - name: entra_receita
+        description: "Flag do seed regra_tipo_lancamento: a venda compõe receita. False quando não há lançamento."
+        data_tests:
+          - not_null
+      - name: entra_volume
+        description: "Flag do seed regra_tipo_lancamento: a venda compõe volume e custo. False quando não há lançamento."
+        data_tests:
+          - not_null

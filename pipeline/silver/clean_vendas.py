@@ -1,8 +1,10 @@
 import pandas as pd
 import s3fs
 import logging
-import os
 import re
+
+from pipeline.settings import s3_storage_options
+from pipeline.silver.text import clean_text
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -14,35 +16,45 @@ PATTERN_ID_CLIENTE = re.compile(r'^C\d{4}$', re.IGNORECASE)   # ex: C0001 – C9
 PATTERN_ID_PRODUTO = re.compile(r'^P\d{3}$', re.IGNORECASE)   # ex: P001 – P999
 
 
-def parse_mixed_dates(date_series):
-    """Trata datas em formatos mistos (ISO e BR) para evitar NaT."""
-    dt1 = pd.to_datetime(date_series, format="%Y-%m-%d", errors="coerce")
-    dt2 = pd.to_datetime(date_series, format="%d/%m/%Y", errors="coerce")
-    return dt1.combine_first(dt2)
+# Formatos de data aceitos em data_emissao. São mutuamente exclusivos (uma string
+# casa com no máximo um), então a ordem não altera o resultado.
+DATE_FORMATS = ("%Y-%m-%d", "%d/%m/%Y", "%d/%m/%y", "%d-%m-%Y")
+
+
+def parse_mixed_dates(date_series: pd.Series) -> pd.Series:
+    """Converte datas em formatos mistos (ISO e variações BR); inválidas viram NaT."""
+    result = pd.Series(pd.NaT, index=date_series.index, dtype="datetime64[ns]")
+    for fmt in DATE_FORMATS:
+        result = result.combine_first(pd.to_datetime(date_series, format=fmt, errors="coerce"))
+    return result
 
 
 def normalize_id(series: pd.Series) -> pd.Series:
-    """Remove espaços e converte None/NaN para string vazia para facilitar validação."""
-    return series.fillna("").astype(str).str.strip()
+    """Remove espaços, padroniza em maiúsculas e converte None/NaN para string vazia (facilita validação e joins)."""
+    return series.fillna("").astype(str).str.strip().str.upper()
 
 
-def validate_referential_integrity(
+def validate_vendas(
     df_vendas: pd.DataFrame,
     df_clientes: pd.DataFrame,
     df_produtos: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Valida integridade referencial de vendas contra os cadastros de clientes e produtos.
+    Valida vendas: campos obrigatórios, medidas e integridade referencial.
 
-    Regras aplicadas (em ordem):
-      1. id_cliente e id_produto não podem ser vazios ou brancos.
-      2. id_cliente deve casar com o padrão PATTERN_ID_CLIENTE.
-      3. id_produto deve casar com o padrão PATTERN_ID_PRODUTO.
-      4. id_cliente deve existir em df_clientes.
-      5. id_produto deve existir em df_produtos.
+    Espera `data_emissao` já convertida (NaT = data inválida) e a coluna
+    `data_emissao_original` com o texto de origem, usado na mensagem de rejeição.
+
+    Regras (um registro pode violar várias; todas entram no motivo):
+      - id_venda não pode ser vazio
+      - data_emissao deve estar em um dos DATE_FORMATS e ser uma data válida
+      - qtd_caixas > 0
+      - preco_unitario > 0
+      - 0 <= desconto_pct < 1
+      - id_cliente / id_produto: não vazios, no formato esperado e existentes no cadastro
 
     Retorna:
-      df_ok       — registros que passaram em todas as regras (→ Silver)
+      df_ok         — registros que passaram em todas as regras (→ Silver)
       df_quarentena — registros rejeitados, com coluna `motivo_rejeicao` (→ Quarentena)
     """
     df = df_vendas.copy()
@@ -52,62 +64,52 @@ def validate_referential_integrity(
     ids_clientes_validos = set(normalize_id(df_clientes["id_cliente"]))
     ids_produtos_validos = set(normalize_id(df_produtos["id_produto"]))
 
-    motivos = []
+    def fmt(col):
+        return "'" + df[col].astype("string").fillna("<nulo>") + "'"
 
-    # Regra 1 — IDs em branco
-    mask_cliente_vazio = df["id_cliente"] == ""
-    mask_produto_vazio = df["id_produto"] == ""
+    cliente_vazio = df["id_cliente"] == ""
+    cliente_formato_ok = df["id_cliente"].str.match(PATTERN_ID_CLIENTE)
+    produto_vazio = df["id_produto"] == ""
+    produto_formato_ok = df["id_produto"].str.match(PATTERN_ID_PRODUTO)
 
-    # Regra 2/3 — Formato de ID inválido
-    mask_cliente_formato = ~df["id_cliente"].str.match(PATTERN_ID_CLIENTE) & ~mask_cliente_vazio
-    mask_produto_formato = ~df["id_produto"].str.match(PATTERN_ID_PRODUTO) & ~mask_produto_vazio
+    # (máscara de violação, mensagem) — a mensagem pode ser fixa ou por linha
+    regras = [
+        (df["id_venda"] == "", "id_venda vazio"),
+        (df["data_emissao"].isna(), "data_emissao inválida: " + fmt("data_emissao_original")),
+        (~(df["qtd_caixas"] > 0), "qtd_caixas deve ser > 0: " + fmt("qtd_caixas")),
+        (~(df["preco_unitario"] > 0), "preco_unitario deve ser > 0: " + fmt("preco_unitario")),
+        (~df["desconto_pct"].between(0, 1, inclusive="left"),
+         "desconto_pct fora de [0, 1): " + fmt("desconto_pct")),
+        (cliente_vazio, "id_cliente vazio"),
+        (~cliente_vazio & ~cliente_formato_ok, "id_cliente formato inválido: " + fmt("id_cliente")),
+        (~cliente_vazio & cliente_formato_ok & ~df["id_cliente"].isin(ids_clientes_validos),
+         "id_cliente sem cadastro: " + fmt("id_cliente")),
+        (produto_vazio, "id_produto vazio"),
+        (~produto_vazio & ~produto_formato_ok, "id_produto formato inválido: " + fmt("id_produto")),
+        (~produto_vazio & produto_formato_ok & ~df["id_produto"].isin(ids_produtos_validos),
+         "id_produto sem cadastro: " + fmt("id_produto")),
+    ]
 
-    # Regra 4/5 — ID não encontrado no cadastro
-    mask_cliente_orphao = (~df["id_cliente"].isin(ids_clientes_validos)) & ~mask_cliente_vazio
-    mask_produto_orphao = (~df["id_produto"].isin(ids_produtos_validos)) & ~mask_produto_vazio
+    if df.empty:
+        return df.drop(columns="data_emissao_original"), df.assign(motivo_rejeicao=pd.Series(dtype="string"))
 
-    # Combina todas as máscaras de rejeição
-    mask_rejeicao = (
-        mask_cliente_vazio | mask_produto_vazio
-        | mask_cliente_formato | mask_produto_formato
-        | mask_cliente_orphao | mask_produto_orphao
-    )
-
-    # Monta coluna descritiva de motivo para auditoria
-    def montar_motivo(row):
-        razoes = []
-        if row["id_cliente"] == "":
-            razoes.append("id_cliente vazio")
-        elif not PATTERN_ID_CLIENTE.match(row["id_cliente"]):
-            razoes.append(f"id_cliente formato inválido: '{row['id_cliente']}'")
-        elif row["id_cliente"] not in ids_clientes_validos:
-            razoes.append(f"id_cliente sem cadastro: '{row['id_cliente']}'")
-
-        if row["id_produto"] == "":
-            razoes.append("id_produto vazio")
-        elif not PATTERN_ID_PRODUTO.match(row["id_produto"]):
-            razoes.append(f"id_produto formato inválido: '{row['id_produto']}'")
-        elif row["id_produto"] not in ids_produtos_validos:
-            razoes.append(f"id_produto sem cadastro: '{row['id_produto']}'")
-
-        return " | ".join(razoes)
+    mensagens = pd.DataFrame(index=df.index)
+    for i, (mask, msg) in enumerate(regras):
+        mask = mask.fillna(True).astype(bool)
+        mensagens[i] = pd.Series(msg, index=df.index).where(mask)
+    motivo = mensagens.apply(lambda row: " | ".join(row.dropna()), axis=1)
+    mask_rejeicao = motivo != ""
 
     df_quarentena = df[mask_rejeicao].copy()
-    df_quarentena["motivo_rejeicao"] = df_quarentena.apply(montar_motivo, axis=1)
-
-    df_ok = df[~mask_rejeicao].copy()
+    df_quarentena["motivo_rejeicao"] = motivo[mask_rejeicao]
+    df_ok = df[~mask_rejeicao].drop(columns="data_emissao_original")
     return df_ok, df_quarentena
 
 
 def main():
     logger.info("Iniciando processamento Silver para Vendas")
 
-    endpoint_url = os.getenv("AIRFLOW__S3__ENDPOINT_URL", "http://localhost:9000")
-    storage_options = {
-        "key": os.getenv("AWS_ACCESS_KEY_ID", "minio"),
-        "secret": os.getenv("AWS_SECRET_ACCESS_KEY", "minio123"),
-        "client_kwargs": {"endpoint_url": endpoint_url},
-    }
+    storage_options = s3_storage_options()
 
     try:
         fs = s3fs.S3FileSystem(**storage_options)
@@ -131,15 +133,18 @@ def main():
         # 2. Normalização de strings antes de qualquer validação
         #    Garante que espaços em branco não passem despercebidos
         # ------------------------------------------------------------------
-        for col in ["id_venda", "id_cliente", "id_produto", "canal_venda", "representante"]:
-            df[col] = df[col].fillna("").astype(str).str.strip()
+        # IDs: vazio ("") em vez de nulo, pois as regras de validação comparam com string vazia
+        for col in ["id_venda", "id_cliente", "id_produto"]:
+            df[col] = df[col].fillna("").astype(str).str.strip().str.upper()
+        # Atributos descritivos: nulo permanece nulo (sem virar "nan" ou "")
+        for col in ["canal_venda", "representante"]:
+            df[col] = clean_text(df[col])
 
         # ------------------------------------------------------------------
         # 3. Transformações de negócio
         # ------------------------------------------------------------------
+        df["data_emissao_original"] = df["data_emissao"].astype("string")
         df["data_emissao"] = parse_mixed_dates(df["data_emissao"])
-        df["ano"] = df["data_emissao"].dt.year
-        df["mes"] = df["data_emissao"].dt.month
 
         for col in ["qtd_caixas", "preco_unitario", "desconto_pct"]:
             df[col] = pd.to_numeric(df[col], errors="coerce")
@@ -148,12 +153,9 @@ def main():
         df["receita_liquida"] = receita_bruta * (1 - df["desconto_pct"].fillna(0))
 
         df["_ingested_at"] = pd.to_datetime(df["_ingested_at"], errors="coerce")
-        df = df.sort_values("_ingested_at").drop_duplicates(subset=["id_venda"], keep="last")
-
-        # Remove linhas sem data válida ou id_venda — não são recuperáveis
-        df = df.dropna(subset=["data_emissao", "ano", "mes"])
-        df = df[df["id_venda"] != ""]
-        logger.info(f"Após limpeza básica: {len(df)} linhas")
+        # Ordenação estável: em empate de _ingested_at o resultado é determinístico
+        df = df.sort_values("_ingested_at", kind="mergesort").drop_duplicates(subset=["id_venda"], keep="last")
+        logger.info(f"Após deduplicação por id_venda: {len(df)} linhas")
 
         # ------------------------------------------------------------------
         # 4. Carrega cadastros de referência da Silver para lookup
@@ -166,22 +168,31 @@ def main():
         )
 
         # ------------------------------------------------------------------
-        # 5. Validação de integridade referencial
+        # 5. Validação: obrigatórios, medidas e integridade referencial.
+        #    Nada é descartado em silêncio: toda rejeição vai para a quarentena.
         # ------------------------------------------------------------------
-        df_ok, df_quarentena = validate_referential_integrity(df, df_clientes, df_produtos)
+        df_ok, df_quarentena = validate_vendas(df, df_clientes, df_produtos)
+
+        # Colunas de partição calculadas só para aprovados (data sempre válida).
+        # int64 nativo: Int64 (nullable) em partition_cols não é relido pelo pyarrow 15.
+        df_ok["ano"] = df_ok["data_emissao"].dt.year.astype("int64")
+        df_ok["mes"] = df_ok["data_emissao"].dt.month.astype("int64")
 
         logger.info(f"Registros aprovados (→ Silver): {len(df_ok)}")
         logger.info(f"Registros rejeitados (→ Quarentena): {len(df_quarentena)}")
 
+        # Remove a quarentena da execução anterior mesmo que a atual venha vazia
+        quarentena_path = "s3://silver/_quarentena/vendas/"
+        if fs.exists(quarentena_path):
+            fs.rm(quarentena_path, recursive=True)
+
         if not df_quarentena.empty:
-            # Log dos motivos para visibilidade imediata no Airflow
-            for motivo, grupo in df_quarentena.groupby("motivo_rejeicao"):
-                logger.warning(f"  [{len(grupo)} registros] {motivo}")
+            # Log por tipo de regra (sem o valor específico) para visibilidade no Airflow
+            regras = df_quarentena["motivo_rejeicao"].str.split(" | ", regex=False).explode().str.split(":").str[0]
+            for regra, qtd in regras.value_counts().items():
+                logger.warning(f"  [{qtd} registros] {regra}")
 
             # Persiste quarentena para auditoria e reprocessamento manual
-            quarentena_path = "s3://silver/_quarentena/vendas/"
-            if fs.exists(quarentena_path):
-                fs.rm(quarentena_path, recursive=True)
             df_quarentena.to_parquet(
                 path=quarentena_path,
                 storage_options=storage_options,
