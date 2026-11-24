@@ -32,7 +32,7 @@ A ordem importa: a Sprint 3 muda partes centrais do pipeline (escrita, carga, in
 ## 🔜 A Fazer — Sprint 2 · Fundação de engenharia
 
 > **Objetivo:** criar a rede de segurança (testes, CI, contratos mais rígidos) antes das mudanças estruturais da Sprint 3, e fechar os achados da validação da Sprint 1.
-> **Plano:** [`docs/backlog/SPRINT-02.md`](docs/backlog/SPRINT-02.md) (aguardando aprovação)
+> **Plano:** [`docs/backlog/SPRINT-02.md`](docs/backlog/SPRINT-02.md) (aprovado em 24/11/2026)
 
 ### ENG-01 · Criar módulo compartilhado `pipeline/common/`
 `eng-software` · 🔴 Alta · `M`
@@ -93,8 +93,8 @@ _Achado na validação final da Sprint 1._ `P012` (Del Valle Pêssego) e `P019` 
 _Achado na Sprint 1._ O container dbt roda como root, então `dbt/logs`, `dbt/target` e `dbt/dbt_packages` ficam com dono `root` no host e atrapalham quem roda o dbt fora do Docker.
 
 - **Critérios de aceite:**
-  - [ ] DockerOperator executa o dbt com o UID/GID do host (`user=`) ou os artefatos vão para um volume dedicado
-  - [ ] Documentado no README
+  - [x] DockerOperator executa o dbt com o UID/GID do host (`user=`) ou os artefatos vão para um volume dedicado
+  - [x] Documentado no README
 
 ---
 

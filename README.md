@@ -152,6 +152,7 @@ cp .env.example .env
 #    - senhas (MinIO exige 8+ caracteres) e AIRFLOW_FERNET_KEY:
 #        python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 #    - DOCKER_GID:            stat -c '%g' /var/run/docker.sock
+#    - HOST_UID / HOST_GID:   id -u / id -g  (dono dos arquivos que o dbt grava em dbt/)
 #    - DBT_PROJECT_HOST_PATH: caminho ABSOLUTO da pasta dbt/ deste repositório
 
 # 2. Build e subida (o airflow-init migra o banco e cria o usuário admin)
@@ -169,6 +170,9 @@ docker compose up -d --build
 | MinIO Console | http://localhost:9001 |
 | pgAdmin | http://localhost:5050 |
 | PostgreSQL Gold | `localhost:5432` (banco `POSTGRES_DB`) |
+
+> **Arquivos do dbt com dono root.** Versões anteriores rodavam o dbt como root, e `dbt/target`, `dbt/logs`, `dbt/dbt_packages` e `dbt/package-lock.yml` podem ter ficado com dono `root`. Para corrigir uma única vez:
+> `docker run --rm -v "$PWD/dbt:/w" alpine:3.20 sh -c "chown -R $(id -u):$(id -g) /w"`
 
 > **Atualizando um ambiente antigo.** Se você já tinha o ambiente rodando antes da Sprint 1, as credenciais e o volume do MinIO mudaram. Recrie os volumes com `docker compose down -v`. Isso apaga os dados locais, que se recriam rodando a DAG. Se preferir manter os volumes, a `fato_vendas` (incremental) ganhou colunas e precisa de um `dbt run --full-refresh --select fato_vendas`.
 
@@ -235,7 +239,7 @@ Limitações assumidas conscientemente, com o card correspondente no [BACKLOG](B
 | Sprint | Foco | Status |
 |---|---|---|
 | **1** | Qualidade de dados, regras de negócio, reprodutibilidade e documentação | ✅ Concluída em 24/11/2026 ([plano e resultados](docs/backlog/SPRINT-01.md)) |
-| **2** | Fundação de engenharia: módulo comum, testes unitários, CI de ponta a ponta, contratos dbt | 🟡 Plano aguardando aprovação ([plano](docs/backlog/SPRINT-02.md)) |
+| **2** | Fundação de engenharia: módulo comum, testes unitários, CI de ponta a ponta, contratos dbt | 🚧 Em execução ([plano](docs/backlog/SPRINT-02.md)) |
 | **3** | Pipeline robusto: idempotência por `logical_date`, escrita atômica, carga tipada, incremental com merge, auditoria | Backlog |
 | **4** | Modelagem e observabilidade: fato financeira, SCD2, representantes, alertas, freshness | Backlog |
 | Opcionais | Cosmos, API FastAPI, Delta Lake, clima por região | Conforme o foco do portfólio |

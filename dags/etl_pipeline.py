@@ -47,7 +47,15 @@ DBT_ENV_VARS = {
     'POSTGRES_DB': _require_env('POSTGRES_DB'),
     'POSTGRES_HOST': _require_env('POSTGRES_HOST'),
     'POSTGRES_PORT': _require_env('POSTGRES_PORT'),
+    # O container roda com o UID do host (abaixo), que não tem home na imagem:
+    # o dbt precisa de um HOME gravável (ex.: dbt deps, ~/.dbt).
+    'HOME': '/tmp',
 }
+
+# UID:GID do host para o container dbt. Sem isso o dbt roda como root e os arquivos
+# que ele grava no bind mount (target/, logs/, dbt_packages/, package-lock.yml)
+# ficam com dono root no host.
+DBT_CONTAINER_USER = f"{_require_env('HOST_UID')}:{_require_env('HOST_GID')}"
 
 default_args = {
     'owner': 'data-engineering',
@@ -150,6 +158,7 @@ with DAG(
     # Argumentos comuns a todos os containers dbt efêmeros
     _dbt_common = dict(
         image=DBT_IMAGE,
+        user=DBT_CONTAINER_USER,
         working_dir='/usr/app/dbt',
         environment=DBT_ENV_VARS,
         mounts=[

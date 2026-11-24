@@ -1,6 +1,6 @@
 # Sprint 2: Fundação de engenharia
 
-> **Status:** 🟡 Aguardando aprovação
+> **Status:** 🟢 Aprovado em 24/11/2026 (todas as decisões conforme as recomendações) · em execução
 > **Escopo:** os 6 cards da coluna "A Fazer — Sprint 2" do [`BACKLOG.md`](../../BACKLOG.md): ENG-01, ENG-02, ENG-03, MOD-02, DQ-09 e INF-04
 > **Objetivo:** criar a rede de segurança (módulo comum, testes unitários, CI de ponta a ponta e contratos dbt mais rígidos) antes das mudanças estruturais da Sprint 3, e fechar os achados da validação da Sprint 1.
 
@@ -75,6 +75,10 @@ Fase 6 – Validação    PR com a CI verde + execução da DAG no ambiente real
 - **`dags/etl_pipeline.py`:** `_dbt_common` com `user=f"{HOST_UID}:{HOST_GID}"` e `HOME=/tmp` no ambiente do container. O `dbt deps` precisa de um HOME gravável.
 - **Limpeza única** das pastas que já pertencem ao root, documentada no README: `docker run --rm -v "$PWD/dbt:/w" alpine chown -R "$(id -u):$(id -g)" /w/logs /w/target /w/dbt_packages`.
 - **Validação:** depois de uma execução da DAG, `find dbt -user root` não retorna nada, e um `dbt` local consegue escrever em `dbt/target`.
+- **Resultado da execução:**
+  - `HOST_UID`/`HOST_GID` são obrigatórias na DAG (falha cedo, como as demais) e `HOME=/tmp` no container.
+  - Limpeza única feita: além das pastas previstas, `dbt/package-lock.yml` (versionado) e `dbt/.user.yml` também pertenciam ao root, porque o `dbt deps` reescreve esses arquivos.
+  - Execução `sprint2_inf04`: 14/14 tasks `success`, **0 arquivos de root em `dbt/`**, e `dbt/target` foi gravado pelo usuário do host.
 
 ### Fase 2: Refatoração
 
@@ -194,9 +198,9 @@ HOST_GID=1000        # id -g
 
 ## Aprovação
 
-- [ ] D1: produtos com custo zero (opção: ___)
-- [ ] D2: clima no job e2e (opção: ___)
-- [ ] D3: meta de cobertura (opção: ___)
-- [ ] D4: estratégia de Git
-- [ ] D5: Python local 3.12
-- [ ] Plano aprovado
+- [x] D1: produtos com custo zero (opção: A)
+- [x] D2: clima no job e2e (opção: A)
+- [x] D3: meta de cobertura (opção: A)
+- [x] D4: estratégia de Git (PR #1 da Sprint 1 mergeado; branch `feat/sprint-2` criada)
+- [x] D5: Python local 3.12
+- [x] Plano aprovado
