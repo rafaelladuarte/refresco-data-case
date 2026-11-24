@@ -21,5 +21,4 @@ SELECT
 FROM {{ ref('fato_vendas') }} f
 JOIN {{ ref('dim_produto') }} p ON f.sk_produto = p.sk_produto
 WHERE f.status_financeiro = 'PAGO'
-  AND f.receita_liquida > 0
 GROUP BY p.sk_produto, p.nome_produto

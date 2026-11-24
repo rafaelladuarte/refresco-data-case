@@ -183,6 +183,12 @@ Fase 6 – Validação    execução ponta a ponta + checklist da seção 5
 - **`vw_q4_margem_bruta.sql`:** remover `AND f.receita_liquida > 0`.
 - **Escopo ampliado (achado do DQ-08):** `parse_mixed_dates` passa a reconhecer também `DD/MM/AA` e `DD-MM-AAAA`. Datas que continuarem inválidas vão para a quarentena com motivo, em vez de serem descartadas em silêncio.
 - **Validação:** `select count(*) from gold.fato_vendas where receita_liquida <= 0` deve retornar 0 sem filtro na view, e a quarentena deve ter as 9 vendas com motivo legível. As 125 vendas com data em formato alternativo devem chegar à fato.
+- **Resultado da execução:**
+  - `validate_referential_integrity` virou `validate_vendas`: uma única lista de regras (obrigatórios, medidas, data e integridade referencial) e um único ponto de quarentena. O motivo junta todas as regras violadas.
+  - Nada é descartado em silêncio: o `dropna` de datas inválidas e o filtro de `id_venda` vazio viraram regras de quarentena. A quarentena preserva o texto original da data (`data_emissao_original`).
+  - Fato: **3.482 vendas** (3.366 + 125 datas recuperadas − 9 medidas inválidas). Quarentena de vendas: 18 (6 `qtd_caixas`, 3 `desconto_pct`, 5 sem cliente e 4 produtos inválidos).
+  - dbt: 50 testes PASS, inclusive `accepted_range` em `qtd_caixas`/`preco_unitario` e `expression_is_true` em `desconto_pct`.
+  - Nota técnica: `ano`/`mes` passam a ser calculados só para os aprovados, como `int64`. Usar `Int64` (nullable) em `partition_cols` quebra a releitura no pyarrow 15.
 
 ### Fase 4: dbt
 

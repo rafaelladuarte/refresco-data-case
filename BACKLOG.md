@@ -70,10 +70,11 @@ Todos os CSVs são lidos como `latin1`, mas só `clientes.csv` é ISO-8859; `ven
 
 - **Arquivos:** `pipeline/silver/clean_vendas.py:144-148`, `dbt/models/marts/analytics/vw_q4_margem_bruta.sql:24`
 - **Critérios de aceite:**
-  - [ ] Regras: `0 <= desconto_pct < 1`, `qtd_caixas > 0`, `preco_unitario > 0`
-  - [ ] Registros inválidos vão para a quarentena com `motivo_rejeicao`
-  - [ ] Filtro `receita_liquida > 0` removido da `vw_q4`
-  - [ ] Testes dbt (`dbt_utils.accepted_range`) nas colunas de `stg_vendas`
+  - [x] Regras: `0 <= desconto_pct < 1`, `qtd_caixas > 0`, `preco_unitario > 0`
+  - [x] Registros inválidos vão para a quarentena com `motivo_rejeicao`
+  - [x] Filtro `receita_liquida > 0` removido da `vw_q4`
+  - [x] Testes dbt (`dbt_utils.accepted_range`) nas colunas de `stg_vendas`
+  - [x] _(escopo ampliado)_ Datas em `DD/MM/AA` e `DD-MM-AAAA` reconhecidas; data inválida vai para a quarentena em vez de ser descartada em silêncio
 
 ### DQ-05 · Substituir meta circular da Q2 por seed de metas
 `bug` · 🔴 Alta · `P`
@@ -193,7 +194,7 @@ O README descreve funcionalidades que não existem. Para quem avalia, isso pesa 
 
 - **Critérios de aceite:**
   - [ ] `tests/` com pytest e fixtures pequenas de DataFrame
-  - [ ] Cobertura de `validate_referential_integrity`, `parse_mixed_dates`, `normalize_ativo`, mapeamentos de `tipo_lancamento`/`status`
+  - [ ] Cobertura de `validate_vendas`, `deduplicate_clientes`, `parse_mixed_dates`, `normalize_ativo`, mapeamentos de `tipo_lancamento`/`status`
   - [ ] Casos de borda: nulos, espaços, IDs fora do padrão, datas BR/ISO, descontos inválidos
   - [ ] Teste de importação da DAG (DAG carrega sem erros e sem ciclos)
 
