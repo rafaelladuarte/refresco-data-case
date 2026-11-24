@@ -48,9 +48,9 @@ Todos os CSVs são lidos como `latin1`, mas só `clientes.csv` é ISO-8859; `ven
 
 - **Arquivos:** `pipeline/bronze/ingest_clima.py:12-13`, `:45-46`, `:79`
 - **Critérios de aceite:**
-  - [ ] Latitude/longitude e período parametrizados (env/config), não hardcoded
-  - [ ] Período derivado das datas de venda (ou do `logical_date`), não `range(2020, 2026)` fixo
-  - [ ] Constantes mortas removidas (`API_URL`, `OPEN_METEO_API_URL` do `.env.example`)
+  - [x] Latitude/longitude e período parametrizados (env/config), não hardcoded
+  - [x] Período derivado das datas de venda (ou do `logical_date`), não `range(2020, 2026)` fixo — _conforme o plano aprovado: período via `CLIMA_ANO_INICIO`/`CLIMA_ANO_FIM` (sem `range` fixo); derivação pelo `logical_date` fica no ARQ-01_
+  - [x] Constantes mortas removidas (`API_URL`, `OPEN_METEO_API_URL` do `.env.example`)
 
 ### DQ-03 · Eliminar o valor `"nan"` como string
 `bug` · 🔴 Alta · `P`

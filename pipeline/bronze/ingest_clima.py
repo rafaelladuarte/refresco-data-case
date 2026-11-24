@@ -1,9 +1,12 @@
-import requests
-import pandas as pd
-import logging
-from datetime import datetime
-import s3fs
 import io
+import logging
+import os
+from dataclasses import dataclass
+from datetime import datetime
+
+import pandas as pd
+import requests
+import s3fs
 
 from pipeline.settings import s3_storage_options
 
@@ -11,12 +14,41 @@ from pipeline.settings import s3_storage_options
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-API_URL = "https://archive-api.open-meteo.com/v1/archive?latitude=-21.78&longitude=-43.35&start_date=2024-01-01&end_date=2024-12-31&daily=temperature_2m_max,precipitation_sum&timezone=America%2FSao_Paulo"
-API_BASE_URL = "https://archive-api.open-meteo.com/v1/archive"
+REQUEST_TIMEOUT_SECONDS = 30
+DAILY_VARIABLES = "temperature_2m_max,precipitation_sum"
+TIMEZONE = "America/Sao_Paulo"
+
+
+@dataclass(frozen=True)
+class ClimaConfig:
+    """Parâmetros da ingestão climática, lidos do ambiente (sem segredos)."""
+    api_url: str
+    latitude: float
+    longitude: float
+    ano_inicio: int
+    ano_fim: int
+
+    @classmethod
+    def from_env(cls) -> "ClimaConfig":
+        config = cls(
+            api_url=os.getenv("OPEN_METEO_ARCHIVE_URL", "https://archive-api.open-meteo.com/v1/archive"),
+            # Padrão: Uberlândia-MG
+            latitude=float(os.getenv("CLIMA_LATITUDE", "-18.9186")),
+            longitude=float(os.getenv("CLIMA_LONGITUDE", "-48.2772")),
+            ano_inicio=int(os.getenv("CLIMA_ANO_INICIO", "2020")),
+            ano_fim=int(os.getenv("CLIMA_ANO_FIM", "2025")),
+        )
+        if config.ano_inicio > config.ano_fim:
+            raise ValueError(
+                f"CLIMA_ANO_INICIO ({config.ano_inicio}) maior que CLIMA_ANO_FIM ({config.ano_fim})"
+            )
+        return config
+
 
 def get_s3_client():
     """Retorna uma nova instância do cliente S3FileSystem"""
     return s3fs.S3FileSystem(**s3_storage_options())
+
 
 def ensure_bucket_exists(fs, bucket_name):
     """Verifica e cria bucket se necessário"""
@@ -32,97 +64,104 @@ def ensure_bucket_exists(fs, bucket_name):
         logger.error(f"Erro ao verificar bucket: {e}")
         return False
 
-def fetch_weather_data_by_year(year):
-    """Busca dados climáticos para um ano específico"""
-    try:
-        start_date = f"{year}-01-01"
-        end_date = f"{year}-12-31"
-        
-        params = {
-            "latitude": -21.78,
-            "longitude": -43.35,
-            "start_date": start_date,
-            "end_date": end_date,
-            "daily": "temperature_2m_max,precipitation_sum",
-            "timezone": "America/Sao_Paulo"
-        }
-        
-        logger.info(f"Consumindo API Open-Meteo para o ano {year}...")
-        response = requests.get(API_BASE_URL, params=params)
 
-        if response.status_code != 200:
-            logger.error(f"Erro API para {year}: {response.status_code}")
-            return None
+def fetch_weather_data_by_year(config: ClimaConfig, year: int) -> pd.DataFrame:
+    """Busca dados climáticos diários de um ano. Erros de rede/HTTP são propagados."""
+    params = {
+        "latitude": config.latitude,
+        "longitude": config.longitude,
+        "start_date": f"{year}-01-01",
+        "end_date": f"{year}-12-31",
+        "daily": DAILY_VARIABLES,
+        "timezone": TIMEZONE,
+    }
 
-        data = response.json()
-        daily = data.get("daily")
+    logger.info(
+        f"Consumindo API Open-Meteo para o ano {year} "
+        f"(latitude={config.latitude}, longitude={config.longitude})..."
+    )
+    response = requests.get(config.api_url, params=params, timeout=REQUEST_TIMEOUT_SECONDS)
+    response.raise_for_status()
 
-        if not daily:
-            logger.warning(f"Sem dados retornados para {year}")
-            return None
+    daily = response.json().get("daily")
+    if not daily:
+        raise ValueError(f"Resposta sem bloco 'daily' para {year}")
 
-        df = pd.DataFrame(daily)
-        df["year"] = year  # Adiciona coluna com o ano
-        logger.info(f"Registros para {year}: {len(df)}")
+    df = pd.DataFrame(daily)
+    df["year"] = year
+    logger.info(f"Registros para {year}: {len(df)}")
+    return df
 
-        return df
 
-    except Exception as e:
-        logger.error(f"Erro ao buscar dados para {year}: {str(e)}")
-        return None
+def fetch_all_weather_data(config: ClimaConfig) -> pd.DataFrame:
+    """Busca todos os anos configurados.
 
-def fetch_all_weather_data():
-    """Busca dados para todos os anos de 2020 a 2025"""
-    all_years = range(2020, 2026)  # 2020, 2021, 2022, 2023, 2024, 2025
+    Falha em um ano isolado é registrada como warning e não interrompe os demais;
+    se nenhum ano for obtido, a ingestão falha.
+    """
+    anos = list(range(config.ano_inicio, config.ano_fim + 1))
     all_data = []
-    
-    for year in all_years:
-        df_year = fetch_weather_data_by_year(year)
-        if df_year is not None and not df_year.empty:
-            all_data.append(df_year)
-    
+    anos_com_falha = []
+
+    for year in anos:
+        try:
+            all_data.append(fetch_weather_data_by_year(config, year))
+        except (requests.RequestException, ValueError) as e:
+            anos_com_falha.append(year)
+            logger.warning(f"Falha ao obter clima de {year}: {e}")
+
+    logger.info(f"Anos obtidos: {len(all_data)} de {len(anos)}")
+    if anos_com_falha:
+        logger.warning(f"Anos sem dados nesta execução: {anos_com_falha}")
+
     if not all_data:
-        logger.error("Nenhum dado foi obtido para nenhum ano")
-        return None
-    
-    # Combina todos os DataFrames
+        raise RuntimeError(
+            f"Nenhum dado de clima retornado pela API para {config.ano_inicio}-{config.ano_fim}"
+        )
+
     final_df = pd.concat(all_data, ignore_index=True)
-    logger.info(f"Total de registros combinados (2020-2025): {len(final_df)}")
-    
+    logger.info(f"Total de registros combinados ({config.ano_inicio}-{config.ano_fim}): {len(final_df)}")
     return final_df
 
-def save_to_bronze(df):
-    if df is None or df.empty:
-        logger.warning("DF vazio")
-        return
 
+def save_to_bronze(df: pd.DataFrame, config: ClimaConfig):
     fs = get_s3_client()
     try:
         if not ensure_bucket_exists(fs, "bronze"):
             raise Exception("Não foi possível criar/verificar o bucket 'bronze'")
 
         df["_ingested_at"] = datetime.now()
-        df["_api_source"] = API_BASE_URL
+        df["_api_source"] = config.api_url
+        df["latitude"] = config.latitude
+        df["longitude"] = config.longitude
 
         ingestion_dt = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-        path = f"bronze/clima/ingestion_date={ingestion_dt}/clima_2020_2025.csv"
+        path = (
+            f"bronze/clima/ingestion_date={ingestion_dt}/"
+            f"clima_{config.ano_inicio}_{config.ano_fim}.csv"
+        )
 
-        with fs.open(path, 'w') as f:
-            df.to_csv(f, index=False)
+        csv_buffer = io.StringIO()
+        df.to_csv(csv_buffer, index=False)
+        with fs.open(path, 'wb') as f:
+            f.write(csv_buffer.getvalue().encode("utf-8"))
 
-        if fs.exists(path):
-            logger.info(f"[OK] Salvo com sucesso no MinIO: {path}")
-            file_size = fs.size(path)
-            logger.info(f"Tamanho: {file_size} bytes")
-        else:
-            logger.error(f"[ERRO] Arquivo não encontrado após salvamento")
+        if not fs.exists(path):
+            raise Exception(f"Arquivo não encontrado após salvamento: {path}")
+        logger.info(f"[OK] Salvo com sucesso no MinIO: {path}")
+        logger.info(f"Tamanho: {fs.size(path)} bytes")
 
     except Exception as e:
         logger.error(f"Erro ao salvar Bronze: {e}")
         raise
 
+
 def main():
-    logger.info("Iniciando ingestão clima -> Bronze (MinIO) para período 2020-2025")
+    config = ClimaConfig.from_env()
+    logger.info(
+        f"Iniciando ingestão clima -> Bronze (MinIO) para {config.ano_inicio}-{config.ano_fim} "
+        f"(latitude={config.latitude}, longitude={config.longitude})"
+    )
 
     fs = get_s3_client()
     try:
@@ -132,13 +171,11 @@ def main():
         logger.error(f"[ERRO] Erro ao conectar ao MinIO: {e}")
         raise Exception(f"Falha de conexão com MinIO: {e}")
 
-    df = fetch_all_weather_data()
-    if df is None or df.empty:
-        raise ValueError("[ERRO] Falha: Nenhum dado de clima retornado pela API para o período 2020-2025.")
-        
-    save_to_bronze(df)
+    df = fetch_all_weather_data(config)
+    save_to_bronze(df, config)
 
     logger.info("[OK] Ingestão finalizada")
+
 
 if __name__ == "__main__":
     main()
