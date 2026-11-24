@@ -97,6 +97,12 @@ pipeline/common/
 - As regras de negócio continuam em cada `clean_*.py` (`validate_vendas`, `deduplicate_clientes` etc.). O `common` só fica com o que é repetido.
 - Remover `pipeline/settings.py`, `pipeline/silver/text.py` e o pacote vazio `pipeline/gold/`. Atualizar os imports da DAG.
 - **Validação:** rodar o e2e da Sprint 1 (MinIO e Postgres isolados) e comparar com a referência: 3.482 vendas na fato, 18 na quarentena de vendas, 5 na de clientes e 65 testes dbt PASS. **Os números precisam ser idênticos.**
+- **Resultado da execução:**
+  - `pipeline/common/` com `config.py` (`S3Config`, `PostgresConfig`, `ClimaConfig` e `require_env`, este também usado pela DAG), `storage.py` (`get_s3_client`, `ensure_bucket`, `read_bronze`, `read_silver`, `write_silver`, `write_quarantine`), `validators.py` (`PATTERN_ID_*`, `normalize_id`, `clean_text`) e `logging.py` (`get_logger`). `settings.py`, `silver/text.py` e `pipeline/gold/` removidos.
+  - A validação foi além das 4 contagens: um fingerprint (hash do conteúdo ordenado, sem `_ingested_at`) de **28 datasets** (Silver, as 2 quarentenas, as tabelas de `load_stage` e as tabelas e views de `gold`), o log do pipeline normalizado e a importação da DAG.
+  - O baseline rodou 2× antes da refatoração, com resultados idênticos entre si (o harness é determinístico).
+  - Depois da refatoração: **3.482 / 18 / 5 / 65 PASS**, os 28 fingerprints idênticos, a DAG com 14 tasks e `max_active_runs=1`, e 0 arquivos de root em `dbt/`.
+  - Única diferença: o log perdeu uma linha INFO (`Bucket 'bronze' já existe`). Só a cópia de `ensure_bucket_exists` do clima registrava esse caso, e a versão unificada segue a do CSV.
 
 ### Fase 3: Testes e qualidade
 

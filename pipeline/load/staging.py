@@ -1,16 +1,13 @@
-import pandas as pd
 from sqlalchemy import create_engine, text
-import logging
 
-from pipeline.settings import postgres_url, s3_storage_options
+from pipeline.common.config import postgres_url
+from pipeline.common.logging import get_logger
+from pipeline.common.storage import read_silver
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 def load_to_staging():
     logger.info("Iniciando carga de dados da camada Silver para Staging (Postgres-Gold)")
-    
-    storage_options = s3_storage_options()
     
     engine = create_engine(postgres_url())
     
@@ -31,7 +28,7 @@ def load_to_staging():
         s3_path = f"s3://silver/{tabela}/"
         
         try:
-            df = pd.read_parquet(s3_path, storage_options=storage_options)
+            df = read_silver(s3_path)
             logger.info(f"Lidos {len(df)} registros da tabela {tabela} do S3.")
             
             kwargs = {

@@ -40,12 +40,12 @@ A ordem importa: a Sprint 3 muda partes centrais do pipeline (escrita, carga, in
 A Sprint 1 já centralizou as credenciais (`pipeline/settings.py`) e a limpeza de texto (`pipeline/silver/text.py`). Continuam duplicados: criação do cliente S3 (7 arquivos), `logging.basicConfig` (8), leitura da Bronze por glob, `rm` + `to_parquet` da Silver e quarentena (5), `ensure_bucket_exists` (2) e regex de ID (2).
 
 - **Critérios de aceite:**
-  - [ ] `pipeline/common/config.py`: configuração tipada (absorve `settings.py`)
-  - [ ] `pipeline/common/storage.py`: cliente S3, leitura da Bronze, escrita da Silver e da quarentena
-  - [ ] `pipeline/common/validators.py`: regex de IDs, `normalize_id`, `clean_text`
-  - [ ] `pipeline/common/logging.py`: configuração única de logging
-  - [ ] Scripts Bronze/Silver/Load usando o módulo comum, sem mudança de comportamento (validado pelo e2e)
-  - [ ] Pacote vazio `pipeline/gold/` removido
+  - [x] `pipeline/common/config.py`: configuração tipada (absorve `settings.py`)
+  - [x] `pipeline/common/storage.py`: cliente S3, leitura da Bronze, escrita da Silver e da quarentena
+  - [x] `pipeline/common/validators.py`: regex de IDs, `normalize_id`, `clean_text`
+  - [x] `pipeline/common/logging.py`: configuração única de logging
+  - [x] Scripts Bronze/Silver/Load usando o módulo comum, sem mudança de comportamento (validado pelo e2e)
+  - [x] Pacote vazio `pipeline/gold/` removido
 
 ### ENG-02 · Testes unitários da camada Silver
 `eng-software` · 🔴 Alta · `M`

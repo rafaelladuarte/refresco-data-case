@@ -1,28 +1,19 @@
 import pandas as pd
-import s3fs
-import logging
 
-from pipeline.settings import s3_storage_options
-from pipeline.silver.text import clean_text
+from pipeline.common.logging import get_logger
+from pipeline.common.storage import get_s3_client, read_bronze, write_silver
+from pipeline.common.validators import clean_text
 
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 def main():
     logger.info("Iniciando processamento Silver para Financeiro")
     
-    storage_options = s3_storage_options()
-    
     try:
-        fs = s3fs.S3FileSystem(**storage_options)
-        arquivos = fs.glob("bronze/financeiro/**/*.csv")
-        if not arquivos:
-            logger.warning("Nenhum arquivo encontrado em bronze/financeiro/")
+        fs = get_s3_client()
+        df = read_bronze(fs, "financeiro")
+        if df is None:
             return
-            
-        logger.info(f"Encontrados {len(arquivos)} arquivos na Bronze. Lendo dados...")
-        df = pd.concat([pd.read_csv(f"s3://{arquivo}", storage_options=storage_options) for arquivo in arquivos], ignore_index=True)
         logger.info(f"Linhas lidas da Bronze: {len(df)}")
         
         df["_ingested_at"] = pd.to_datetime(df["_ingested_at"], errors="coerce")
@@ -60,19 +51,7 @@ def main():
         
         logger.info(f"Deduplicação concluída. Linhas finais: {len(df_silver)}")
         
-        target_path_full = "s3://silver/financeiro/"
-        
-        if fs.exists(target_path_full):
-            logger.info(f"Limpando diretório existente: {target_path_full}")
-            fs.rm(target_path_full, recursive=True)
-        
-        df_silver.to_parquet(
-            path=target_path_full,
-            partition_cols=["ano", "mes"],
-            storage_options=storage_options,
-            index=False,
-            compression="snappy"
-        )
+        write_silver(fs, df_silver, "s3://silver/financeiro/", partition_cols=["ano", "mes"])
         logger.info("[OK] Tabela de Financeiro processada e salva com sucesso na Silver!")
         
     except Exception as e:

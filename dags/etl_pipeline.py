@@ -8,6 +8,7 @@ import os
 
 sys.path.append('/opt/airflow')
 
+from pipeline.common.config import require_env
 from pipeline.bronze.ingest_csv import main as ingest_csv_main
 from pipeline.bronze.ingest_clima import main as ingest_clima_main
 
@@ -24,15 +25,7 @@ from pipeline.load.staging import load_to_staging
 # O DockerOperator monta este caminho diretamente do host para o container
 # dbt que ele vai criar.
 # ---------------------------------------------------------------------------
-def _require_env(name):
-    """Falha explicitamente se a variável de ambiente obrigatória não existir."""
-    value = os.getenv(name)
-    if not value:
-        raise RuntimeError(f"Variável de ambiente obrigatória não definida: {name}")
-    return value
-
-
-DBT_PROJECT_HOST_PATH = _require_env('DBT_PROJECT_HOST_PATH')
+DBT_PROJECT_HOST_PATH = require_env('DBT_PROJECT_HOST_PATH')
 
 # Rede Docker com nome fixo (networks.uberlandia-net.name no docker-compose.yml)
 DOCKER_NETWORK = os.getenv('DOCKER_NETWORK', 'uberlandia-net')
@@ -42,11 +35,11 @@ DBT_IMAGE = os.getenv('DBT_IMAGE', 'ghcr.io/dbt-labs/dbt-postgres:1.8.2')
 
 # Variáveis de ambiente passadas ao container dbt pelo DockerOperator
 DBT_ENV_VARS = {
-    'POSTGRES_USER': _require_env('POSTGRES_USER'),
-    'POSTGRES_PASSWORD': _require_env('POSTGRES_PASSWORD'),
-    'POSTGRES_DB': _require_env('POSTGRES_DB'),
-    'POSTGRES_HOST': _require_env('POSTGRES_HOST'),
-    'POSTGRES_PORT': _require_env('POSTGRES_PORT'),
+    'POSTGRES_USER': require_env('POSTGRES_USER'),
+    'POSTGRES_PASSWORD': require_env('POSTGRES_PASSWORD'),
+    'POSTGRES_DB': require_env('POSTGRES_DB'),
+    'POSTGRES_HOST': require_env('POSTGRES_HOST'),
+    'POSTGRES_PORT': require_env('POSTGRES_PORT'),
     # O container roda com o UID do host (abaixo), que não tem home na imagem:
     # o dbt precisa de um HOME gravável (ex.: dbt deps, ~/.dbt).
     'HOME': '/tmp',
@@ -55,7 +48,7 @@ DBT_ENV_VARS = {
 # UID:GID do host para o container dbt. Sem isso o dbt roda como root e os arquivos
 # que ele grava no bind mount (target/, logs/, dbt_packages/, package-lock.yml)
 # ficam com dono root no host.
-DBT_CONTAINER_USER = f"{_require_env('HOST_UID')}:{_require_env('HOST_GID')}"
+DBT_CONTAINER_USER = f"{require_env('HOST_UID')}:{require_env('HOST_GID')}"
 
 default_args = {
     'owner': 'data-engineering',

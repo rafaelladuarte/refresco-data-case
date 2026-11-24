@@ -32,7 +32,7 @@ As decisões D1, D2 e D3 foram aprovadas no [plano da Sprint 1](backlog/SPRINT-0
 **Contexto.** `astype(str)` transformava `NaN` na string `"nan"`. Isso anulava filtros `notna()` e fazia `nan` chegar ao warehouse como valor de negócio (a view Q2 tinha `WHEN canal = 'nan' THEN 'Outros'`).
 
 **Decisão.**
-- Helper `clean_text` (`pipeline/silver/text.py`): dtype `string` do pandas (nullable), `strip`, e vazio tratado como nulo.
+- Helper `clean_text` (`pipeline/common/validators.py`): dtype `string` do pandas (nullable), `strip`, e vazio tratado como nulo.
 - IDs continuam como string vazia (`""`), porque as regras de validação comparam com vazio. Também são padronizados em maiúsculas.
 - Na dimensão, atributo ausente vira membro desconhecido: `coalesce(canal, 'Não informado')` em `dim_cliente`, protegido por teste `not_null`.
 
@@ -111,7 +111,7 @@ As decisões D1, D2 e D3 foram aprovadas no [plano da Sprint 1](backlog/SPRINT-0
 **Contexto.** Fernet key, senhas do Airflow, pgAdmin e MinIO estavam fixas no `docker-compose.yml` e como padrão nos scripts. As versões não estavam fixadas, e o `requirements.txt` incluía `apache-airflow`, que o pip podia atualizar no build.
 
 **Decisão.**
-- Credenciais só via `.env`. O compose usa `${VAR:?}` e falha com mensagem clara. Os scripts usam `require_env` (`pipeline/settings.py`), sem senha padrão.
+- Credenciais só via `.env`. O compose usa `${VAR:?}` e falha com mensagem clara. Os scripts usam `require_env` (`pipeline/common/config.py`), sem senha padrão.
 - Imagem `apache/airflow:2.9.0-python3.12` com o constraints oficial. Dependências e imagens com tags fixas.
 - A imagem `minio/minio` deixou de ser distribuída publicamente, então foi adotada a `bitnamilegacy/minio:2025.7.23-debian-12-r5`.
 - `docker.sock` montado com leitura e escrita: `:ro` não restringe a API do Docker e daria falsa sensação de segurança.

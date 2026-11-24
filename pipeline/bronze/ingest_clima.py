@@ -1,68 +1,18 @@
 import io
-import logging
-import os
-from dataclasses import dataclass
 from datetime import datetime
 
 import pandas as pd
 import requests
-import s3fs
 
-from pipeline.settings import s3_storage_options
+from pipeline.common.config import ClimaConfig
+from pipeline.common.logging import get_logger
+from pipeline.common.storage import ensure_bucket, get_s3_client
 
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 REQUEST_TIMEOUT_SECONDS = 30
 DAILY_VARIABLES = "temperature_2m_max,precipitation_sum"
 TIMEZONE = "America/Sao_Paulo"
-
-
-@dataclass(frozen=True)
-class ClimaConfig:
-    """Parâmetros da ingestão climática, lidos do ambiente (sem segredos)."""
-    api_url: str
-    latitude: float
-    longitude: float
-    ano_inicio: int
-    ano_fim: int
-
-    @classmethod
-    def from_env(cls) -> "ClimaConfig":
-        config = cls(
-            api_url=os.getenv("OPEN_METEO_ARCHIVE_URL", "https://archive-api.open-meteo.com/v1/archive"),
-            # Padrão: Uberlândia-MG
-            latitude=float(os.getenv("CLIMA_LATITUDE", "-18.9186")),
-            longitude=float(os.getenv("CLIMA_LONGITUDE", "-48.2772")),
-            ano_inicio=int(os.getenv("CLIMA_ANO_INICIO", "2020")),
-            ano_fim=int(os.getenv("CLIMA_ANO_FIM", "2025")),
-        )
-        if config.ano_inicio > config.ano_fim:
-            raise ValueError(
-                f"CLIMA_ANO_INICIO ({config.ano_inicio}) maior que CLIMA_ANO_FIM ({config.ano_fim})"
-            )
-        return config
-
-
-def get_s3_client():
-    """Retorna uma nova instância do cliente S3FileSystem"""
-    return s3fs.S3FileSystem(**s3_storage_options())
-
-
-def ensure_bucket_exists(fs, bucket_name):
-    """Verifica e cria bucket se necessário"""
-    try:
-        if not fs.exists(bucket_name):
-            logger.info(f"Criando bucket '{bucket_name}'...")
-            fs.mkdir(bucket_name)
-            logger.info(f"Bucket '{bucket_name}' criado")
-            return True
-        logger.info(f"Bucket '{bucket_name}' já existe")
-        return True
-    except Exception as e:
-        logger.error(f"Erro ao verificar bucket: {e}")
-        return False
 
 
 def fetch_weather_data_by_year(config: ClimaConfig, year: int) -> pd.DataFrame:
@@ -127,7 +77,7 @@ def fetch_all_weather_data(config: ClimaConfig) -> pd.DataFrame:
 def save_to_bronze(df: pd.DataFrame, config: ClimaConfig):
     fs = get_s3_client()
     try:
-        if not ensure_bucket_exists(fs, "bronze"):
+        if not ensure_bucket(fs, "bronze"):
             raise Exception("Não foi possível criar/verificar o bucket 'bronze'")
 
         df["_ingested_at"] = datetime.now()

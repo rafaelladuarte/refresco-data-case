@@ -1,18 +1,14 @@
-import pandas as pd
+import io
 import os
 from datetime import datetime
-import logging
 from pathlib import Path
-import s3fs
-import io
 
-from pipeline.settings import s3_storage_options
+import pandas as pd
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+from pipeline.common.logging import get_logger
+from pipeline.common.storage import ensure_bucket, get_s3_client
+
+logger = get_logger(__name__)
 
 airflow_home = os.getenv("AIRFLOW_HOME", "/opt/airflow")
 LOCAL_RAW_DIR = Path(f"{airflow_home}/data/raw")
@@ -28,22 +24,6 @@ SOURCE_ENCODINGS = {
     "vendas": "utf-8",
 }
 BRONZE_ENCODING = "utf-8"
-
-def get_s3_client():
-    """Retorna uma nova instância do cliente S3FileSystem (fork-safe)"""
-    return s3fs.S3FileSystem(**s3_storage_options())
-
-def ensure_bucket_exists(fs, bucket_name):
-    """Verifica e cria bucket se necessário"""
-    try:
-        if not fs.exists(bucket_name):
-            logger.info(f"Criando bucket '{bucket_name}'...")
-            fs.mkdir(bucket_name)
-            logger.info(f"Bucket '{bucket_name}' criado")
-        return True
-    except Exception as e:
-        logger.error(f"Erro ao verificar bucket: {e}")
-        return False
 
 def get_ingestion_date():
     return datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
@@ -81,7 +61,7 @@ def process_table(fs, table_name: str):
         ingestion_date = get_ingestion_date()
         partition_path = f"{BRONZE_DIR}/{table_name}/ingestion_date={ingestion_date}"
         
-        if not ensure_bucket_exists(fs, BRONZE_DIR):
+        if not ensure_bucket(fs, BRONZE_DIR):
             raise Exception("Não foi possível verificar/criar o bucket bronze")
         
         if not fs.exists(partition_path):

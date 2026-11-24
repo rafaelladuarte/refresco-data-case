@@ -184,9 +184,9 @@ docker compose up -d --build
 refresco-data-case/
 ├── dags/etl_pipeline.py          # DAG do Airflow (Python + DockerOperator para o dbt)
 ├── pipeline/
-│   ├── settings.py               # Configuração e credenciais via ambiente
+│   ├── common/                   # config (ambiente), storage (S3), validators (IDs, texto), logging
 │   ├── bronze/                   # ingest_csv.py, ingest_clima.py
-│   ├── silver/                   # clean_*.py, text.py (validação, dedup, quarentena)
+│   ├── silver/                   # clean_*.py (regras de validação, dedup, quarentena)
 │   └── load/staging.py           # Silver → load_stage (PostgreSQL)
 ├── dbt/
 │   ├── models/staging/           # Views stg_* (cast e renomeação) + testes
