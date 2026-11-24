@@ -13,6 +13,7 @@ As decisões D1, D2 e D3 foram aprovadas no [plano da Sprint 1](backlog/SPRINT-0
 | [006](#adr-006--metas-fictícias-via-seed-d3) | Metas fictícias via seed (D3) | Gold | Aceita |
 | [007](#adr-007--clima-diário-de-uberlândia) | Clima diário de Uberlândia | Bronze / Gold | Aceita |
 | [008](#adr-008--configuração-e-credenciais-via-ambiente) | Configuração e credenciais via ambiente | Infra | Aceita |
+| [009](#adr-009--produtos-sem-custo-na-origem-dq-09-d1-da-sprint-2) | Produtos sem custo na origem (DQ-09) | Silver / Gold | Aceita |
 
 ---
 
@@ -117,3 +118,15 @@ As decisões D1, D2 e D3 foram aprovadas no [plano da Sprint 1](backlog/SPRINT-0
 - `docker.sock` montado com leitura e escrita: `:ro` não restringe a API do Docker e daria falsa sensação de segurança.
 
 **Consequências.** O ambiente é reproduzível em um clone novo. Os riscos aceitos para uso local (`docker.sock` equivale a root no host; imagem do MinIO congelada) estão documentados no README.
+
+## ADR-009 · Produtos sem custo na origem (DQ-09, D1 da Sprint 2)
+
+**Contexto.** `P012` (Del Valle Pêssego) e `P019` (Burn Energy) chegam com `custo_unitario = 0.00`. Com custo zero, a Q4 mostrava margem de 100% para esses SKUs.
+
+**Decisão (opção A).**
+- Na Silver (`flag_valores_indisponiveis`, em `clean_produtos.py`), `custo_unitario` e `preco_tabela` nulos, não numéricos ou `<= 0` viram NULL, com as flags `custo_disponivel`/`preco_disponivel = false`. Os produtos afetados são listados no log.
+- O produto **não** vai para a quarentena. Se fosse, as vendas dele virariam órfãs e sairiam de receita e volume (Q1–Q3).
+- A fato herda o NULL: `custo_total` e `margem_bruta` ficam nulos para esses SKUs. A `vw_q4` expõe `custo_disponivel` e deixa custo e margem nulos quando a flag é falsa. O Streamlit mostra "custo indisponível" na tabela e tira esses produtos do gráfico.
+- Teste dbt em `dim_produto`: a flag e o valor precisam concordar (disponível ⇒ `> 0`; indisponível ⇒ NULL).
+
+**Consequências.** A margem deixa de ser inflada, e a falta de custo fica visível em vez de escondida. Receita e volume de P012/P019 continuam nas Q1–Q3, sem alteração. Quando a origem trouxer o custo, a flag passa a `true` sem mudança de código (só a fato incremental precisa de `dbt run --full-refresh --select fato_vendas+` para recalcular vendas antigas, ver MOD-01).

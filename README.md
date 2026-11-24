@@ -39,7 +39,7 @@ Capturas da validação final da Sprint 1, em um ambiente recriado do zero (`doc
 
 ![Dashboard: Q3 e Q4](docs/images/dashboard_q3_q4.png)
 
-> Na Q4, `Del Valle Pêssego` e `Burn Energy` aparecem com margem de 100% porque a origem traz `custo_unitario = 0.00`. O problema foi identificado na validação e está no backlog (card DQ-09).
+> Na Q4, `Del Valle Pêssego` e `Burn Energy` aparecem como **custo indisponível**: a origem traz `custo_unitario = 0.00`. Eles continuam contando em receita e volume, mas ficam fora do ranking e do gráfico de margem (DQ-09).
 
 ---
 
@@ -128,13 +128,14 @@ Justificativas completas, no formato ADR: **[docs/decisoes_tratamento.md](docs/d
 |---|---|---|
 | Clientes | `id_cliente` no padrão `C9999`; `cnpj` e nome obrigatórios; 1 registro por `id_cliente`; CNPJ duplicado mantém o menor id | `silver/_quarentena/clientes/` |
 | Vendas | `id_venda` obrigatório; data válida (4 formatos aceitos); `qtd_caixas > 0`; `preco_unitario > 0`; `0 ≤ desconto_pct < 1`; cliente e produto existentes no cadastro | `silver/_quarentena/vendas/` |
-| Produtos | `id_produto` no padrão `P999` | apenas log (quarentena genérica no backlog, card ARQ-05) |
+| Produtos | `id_produto` no padrão `P999`; `custo_unitario`/`preco_tabela` `<= 0` ou ausente vira NULL com flag `custo_disponivel`/`preco_disponivel = false` (o produto é mantido e fica fora da margem) | apenas log (quarentena genérica no backlog, card ARQ-05) |
 | Financeiro | tipos e status mapeados para domínios fixos | — |
 
 Na última execução de referência, **3.482 vendas** chegaram à fato. A quarentena ficou com 18 vendas (6 com quantidade negativa, 3 com desconto ≥ 100%, 5 sem cliente e 4 com produto inválido) e 5 recadastros de clientes.
 
-**Testes dbt (65):**
+**Testes dbt (69):**
 - Unicidade e `not_null` de chaves.
+- Coerência entre flag e valor em `dim_produto`: custo disponível é sempre `> 0`, e indisponível é sempre NULL (idem para preço).
 - `relationships` da fato com as dimensões e com o seed de regras: um tipo de lançamento novo sem regra quebra o build.
 - Faixas de medidas em `stg_vendas`, como defesa em profundidade.
 - Testes dos seeds.
@@ -175,7 +176,9 @@ docker compose up -d --build
 > **Arquivos do dbt com dono root.** Versões anteriores rodavam o dbt como root, e `dbt/target`, `dbt/logs`, `dbt/dbt_packages` e `dbt/package-lock.yml` podem ter ficado com dono `root`. Para corrigir uma única vez:
 > `docker run --rm -v "$PWD/dbt:/w" alpine:3.20 sh -c "chown -R $(id -u):$(id -g) /w"`
 
-> **Atualizando um ambiente antigo.** Se você já tinha o ambiente rodando antes da Sprint 1, as credenciais e o volume do MinIO mudaram. Recrie os volumes com `docker compose down -v`. Isso apaga os dados locais, que se recriam rodando a DAG. Se preferir manter os volumes, a `fato_vendas` (incremental) ganhou colunas e precisa de um `dbt run --full-refresh --select fato_vendas`.
+> **Atualizando um ambiente da Sprint 1.** A partir do DQ-09, P012/P019 têm `custo_total`/`margem_bruta` NULL na `fato_vendas`. Como ela é incremental, as vendas antigas só são recalculadas com `dbt run --full-refresh --select fato_vendas+` (uma vez, depois de rodar a DAG; o `+` recria as views analíticas, que o full-refresh derruba em cascata).
+
+> **Atualizando um ambiente antigo.** Se você já tinha o ambiente rodando antes da Sprint 1, as credenciais e o volume do MinIO mudaram. Recrie os volumes com `docker compose down -v`. Isso apaga os dados locais, que se recriam rodando a DAG. Se preferir manter os volumes, a `fato_vendas` (incremental) ganhou colunas e precisa de um `dbt run --full-refresh --select fato_vendas+`.
 
 ---
 
@@ -251,9 +254,8 @@ Limitações assumidas conscientemente, com o card correspondente no [BACKLOG](B
 | A Silver é sobrescrita com `rm` + `write`, sem atomicidade | Uma falha no meio deixa a Silver parcial | ARQ-02 |
 | A carga usa `DROP TABLE ... CASCADE` e tipos inferidos pelo pandas | Força recriar as views `stg_*` a cada execução | ARQ-03 |
 | O incremental da fato filtra por `data_emissao` | Status financeiro atualizado depois não é reprocessado | MOD-01 |
-| Sem testes unitários Python e sem CI | Validação manual e pelos testes dbt | ENG-02, ENG-03 |
+| Sem CI | Testes unitários e e2e rodados manualmente | ENG-03 |
 | Execuções simultâneas corromperiam a Silver (`rm` + escrita) | Mitigado com `max_active_runs=1`; a correção estrutural é a escrita atômica | ARQ-01, ARQ-02 |
-| `custo_unitario = 0` na origem para 2 produtos, sem validação | Margem de 100% na Q4 para esses SKUs | DQ-09 |
 | As metas são fictícias e os dados são sintéticos, com tipos de lançamento uniformes | Números ilustrativos, não comerciais | — |
 | Clima de uma única coordenada (Uberlândia) para 4 mesorregiões | Correlação clima × vendas aproximada | backlog |
 | `docker.sock` montado no Airflow | Equivale a acesso root no host; aceitável só em ambiente local | — |

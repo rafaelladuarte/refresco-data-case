@@ -22,5 +22,7 @@ select
     embalagem,
     volume_ml,
     preco_tabela,
-    custo_unitario
+    custo_unitario,
+    custo_disponivel,
+    preco_disponivel
 from latest_records

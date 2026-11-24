@@ -137,6 +137,13 @@ pipeline/common/
   - Teste em `dim_produto`: `custo_unitario > 0` quando `custo_disponivel`.
 - **`vw_q4`:** margem calculada só para produtos com custo, e os demais aparecem com margem nula. O Streamlit mostra "custo indisponível" na tabela e tira esses produtos do gráfico de margem.
 - **Validação:** P012 e P019 sem margem de 100% na Q4; receita e volume desses SKUs mantidos nas Q1–Q3.
+- **Resultado da execução:**
+  - Silver: `flag_valores_indisponiveis` em `clean_produtos.py` (custo/preço `<= 0`, nulo ou não numérico vira NULL, com `custo_disponivel`/`preco_disponivel`). O log lista `['P012', 'P019']`. 13 testes unitários novos (173 no total), e o `clean_produtos` entrou no gate de cobertura (100%).
+  - dbt: as flags foram expostas em `stg_produtos`/`dim_produto`; 4 testes novos (`not_null` das flags e 2 `expression_is_true` de coerência flag × valor), **69 PASS**. A `vw_q4` ganhou `custo_disponivel`, com custo e margem NULL quando a flag é falsa.
+  - e2e isolado comparado ao baseline: mudaram só os 6 datasets de produtos/fato/Q4. Os outros 22, **incluindo `vw_q1`, `vw_q2` e `vw_q3`**, ficaram idênticos. Comparando com o HEAD anterior (worktree), a `fato_vendas` sem `custo_total`/`margem_bruta` é idêntica nas 3.482 linhas, e as 3.228 vendas dos demais SKUs são idênticas por inteiro. Só as 254 vendas de P012/P019 mudaram (custo e margem passaram a NULL).
+  - Q4: nenhum produto com margem ≥ 100% (máxima de 83,97%, Crystal 500ml). P012/P019 aparecem com receita (R$ 720,64 e R$ 2.258,82 nas vendas pagas) e margem NULL.
+  - Ambiente real: DAG `dq09_validacao` 14/14 `success`. A fato incremental ficou, como esperado, com `custo_total = 0.00` nas vendas antigas desses SKUs até o `dbt run --full-refresh --select fato_vendas+`. Sem o `+`, o full-refresh derruba em cascata as views `vw_q*`. O README foi corrigido nos dois pontos que mostravam o comando sem `+`. Depois do full-refresh: 3.482 linhas, receita total igual (R$ 597.343,23), 69 PASS e 0 arquivos de root em `dbt/`.
+  - Streamlit: a tabela marca "custo indisponível" (coluna Observação) e ganhou um aviso visível abaixo dela, porque as linhas ficavam fora da área visível da tabela. O gráfico de margem só mostra produtos com custo. A captura `dashboard_q3_q4.png` foi atualizada.
 
 ### Fase 4: dbt
 

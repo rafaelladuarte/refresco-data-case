@@ -83,9 +83,9 @@ Os órfãos já são removidos na Silver, então os testes de relacionamento com
 _Achado na validação final da Sprint 1._ `P012` (Del Valle Pêssego) e `P019` (Burn Energy) chegam com `custo_unitario = 0.00` na origem e aparecem na Q4 com margem de 100%. Nenhuma regra valida custo hoje.
 
 - **Critérios de aceite:**
-  - [ ] Regra na Silver de produtos: `custo_unitario > 0` e `preco_tabela > 0` (ou custo zero sinalizado explicitamente)
-  - [ ] Produto inválido vai para quarentena, ou é mantido com flag `custo_indisponivel` e excluído da margem (decisão de negócio)
-  - [ ] Teste dbt em `dim_produto.custo_unitario`
+  - [x] Regra na Silver de produtos: `custo_unitario > 0` e `preco_tabela > 0` (ou custo zero sinalizado explicitamente)
+  - [x] Produto inválido vai para quarentena, ou é mantido com flag `custo_indisponivel` e excluído da margem (decisão de negócio)
+  - [x] Teste dbt em `dim_produto.custo_unitario`
 
 ### INF-04 · Artefatos do dbt criados como root
 `infra` · 🟢 Baixa · `P`

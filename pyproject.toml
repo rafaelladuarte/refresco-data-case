@@ -21,6 +21,7 @@ include = [
     "pipeline/common/*",
     "pipeline/silver/clean_clientes.py",
     "pipeline/silver/clean_financeiro.py",
+    "pipeline/silver/clean_produtos.py",
     "pipeline/silver/clean_vendas.py",
 ]
 # main() só orquestra entrada e saída (S3/Postgres) e é coberto pelo e2e (decisão D3 da Sprint 2)

@@ -17,6 +17,10 @@ renamed as (
         cast(volume_ml as numeric(10,2)) as volume_ml,
         cast(preco_tabela as numeric(10,2)) as preco_tabela,
         cast(custo_unitario as numeric(10,2)) as custo_unitario,
+
+        -- qualidade (DQ-09): false quando o valor na origem é <= 0 ou ausente (valor vem NULL)
+        cast(custo_disponivel as boolean) as custo_disponivel,
+        cast(preco_disponivel as boolean) as preco_disponivel,
         
         -- metadados
         cast(_ingested_at as timestamp) as ingested_at,

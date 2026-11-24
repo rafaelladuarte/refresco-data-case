@@ -65,6 +65,24 @@ models:
         description: "Chave natural vinda da origem."
         data_tests:
           - not_null
+      - name: custo_unitario
+        description: "Custo unitário. NULL quando a origem traz custo <= 0 ou ausente (ver custo_disponivel)."
+      - name: custo_disponivel
+        description: "False quando o custo da origem é <= 0 ou ausente: o produto fica fora do cálculo de margem (DQ-09)."
+        data_tests:
+          - not_null
+      - name: preco_disponivel
+        description: "False quando o preço de tabela da origem é <= 0 ou ausente (preco_tabela fica NULL)."
+        data_tests:
+          - not_null
+    data_tests:
+      # A flag e o valor precisam concordar: custo disponível é sempre positivo, indisponível é sempre NULL
+      - dbt_utils.expression_is_true:
+          name: dim_produto_custo_coerente_com_flag
+          expression: "(custo_disponivel and custo_unitario > 0) or (not custo_disponivel and custo_unitario is null)"
+      - dbt_utils.expression_is_true:
+          name: dim_produto_preco_coerente_com_flag
+          expression: "(preco_disponivel and preco_tabela > 0) or (not preco_disponivel and preco_tabela is null)"
 
   - name: dim_representante
     description: "Dimensão de representantes extraída das vendas (valores únicos)."

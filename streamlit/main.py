@@ -170,7 +170,7 @@ try:
     df_q1 = run_query("SELECT * FROM gold.vw_q1_ranking_vendas ORDER BY regiao, ranking")
     df_q2 = run_query("SELECT * FROM gold.vw_q2_volume_vs_meta ORDER BY canal")
     df_q3 = run_query("SELECT * FROM gold.vw_q3_tendencia_volume ORDER BY nome_produto, data_completa")
-    df_q4 = run_query("SELECT * FROM gold.vw_q4_margem_bruta ORDER BY margem_bruta_percentual DESC")
+    df_q4 = run_query("SELECT * FROM gold.vw_q4_margem_bruta ORDER BY margem_bruta_percentual DESC NULLS LAST")
     db_ok = True
 except Exception as exc:
     st.error(f" Falha ao conectar ao banco de dados: `{exc}`")
@@ -402,23 +402,30 @@ st.markdown("---")
 st.markdown('<p class="section-title">Q4 — Rentabilidade por SKU</p>', unsafe_allow_html=True)
 st.markdown(
     '<p class="section-desc">Margem bruta percentual de cada produto, ordenada da maior para a menor. '
-    'Identifique os SKUs mais e menos rentáveis do portfólio.</p>',
+    'Identifique os SKUs mais e menos rentáveis do portfólio. Produtos sem custo na origem aparecem '
+    'como "custo indisponível" e ficam fora do ranking de margem.</p>',
     unsafe_allow_html=True,
 )
+
+# Produtos sem custo na origem (DQ-09): custo e margem NULL na view, fora do ranking e do gráfico
+df_q4_com_custo = df_q4[df_q4["custo_disponivel"]]
+df_q4_sem_custo = df_q4[~df_q4["custo_disponivel"]]
 
 col_t, col_chart = st.columns([1, 1])
 
 with col_t:
-    # Performance: limita a 20 SKUs mais relevantes antes de renderizar
-    df_q4_display = (
-        df_q4
-        .sort_values("margem_bruta_percentual", ascending=False)
-        .head(20)[["nome_produto", "receita_liquida_total", "custo_total", "margem_bruta", "margem_bruta_percentual"]]
-        .reset_index(drop=True)
+    # Top 20 por margem e, ao final, os SKUs sem custo (com receita, sem margem)
+    q4_cols = ["nome_produto", "receita_liquida_total", "custo_total", "margem_bruta", "margem_bruta_percentual"]
+    df_q4_display = pd.concat([
+        df_q4_com_custo.sort_values("margem_bruta_percentual", ascending=False).head(20)[q4_cols],
+        df_q4_sem_custo.sort_values("nome_produto")[q4_cols],
+    ]).reset_index(drop=True)
+    df_q4_display["observacao"] = (
+        df_q4_display["margem_bruta_percentual"].isna().map({True: "custo indisponível", False: ""})
     )
 
     # Valor máximo para normalizar a barra de progresso
-    margem_max = float(df_q4_display["margem_bruta_percentual"].max())
+    margem_max = float(df_q4_com_custo["margem_bruta_percentual"].max())
 
     st.dataframe(
         df_q4_display,
@@ -451,14 +458,26 @@ with col_t:
                 min_value=0,
                 max_value=margem_max,
             ),
+            "observacao": st.column_config.TextColumn(
+                "Observação",
+                help="Custo indisponível: a origem traz custo <= 0 ou ausente (margem não calculada)",
+            ),
         },
         hide_index=True,
     )
 
+    if not df_q4_sem_custo.empty:
+        itens = ", ".join(
+            # "\\$" escapa o cifrão: o Markdown do Streamlit trata "$...$" como LaTeX
+            f"{r.nome_produto} (receita R\\$ {r.receita_liquida_total:.2f})"
+            for r in df_q4_sem_custo.sort_values("nome_produto").itertuples()
+        )
+        st.caption(f"⚠️ Custo indisponível na origem, fora do ranking de margem: {itens}.")
+
 with col_chart:
     # Ordena ascendente para o Plotly renderizar o mais rentável no topo
     df_q4_sorted = (
-        df_q4
+        df_q4_com_custo
         .sort_values("margem_bruta_percentual", ascending=True)
         .tail(20)
         .reset_index(drop=True)
