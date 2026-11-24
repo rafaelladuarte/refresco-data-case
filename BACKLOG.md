@@ -51,10 +51,10 @@ A Sprint 1 já centralizou as credenciais (`pipeline/settings.py`) e a limpeza d
 `eng-software` · 🔴 Alta · `M`
 
 - **Critérios de aceite:**
-  - [ ] `tests/` com pytest e fixtures pequenas de DataFrame
-  - [ ] Cobertura de `validate_vendas`, `deduplicate_clientes`, `parse_mixed_dates`, `normalize_ativo`, mapeamentos de `tipo_lancamento`/`status`
-  - [ ] Casos de borda: nulos, espaços, IDs fora do padrão, datas BR/ISO, descontos inválidos
-  - [ ] Teste de importação da DAG (DAG carrega sem erros e sem ciclos)
+  - [x] `tests/` com pytest e fixtures pequenas de DataFrame
+  - [x] Cobertura de `validate_vendas`, `deduplicate_clientes`, `parse_mixed_dates`, `normalize_ativo`, mapeamentos de `tipo_lancamento`/`status`
+  - [x] Casos de borda: nulos, espaços, IDs fora do padrão, datas BR/ISO, descontos inválidos
+  - [x] Teste de importação da DAG (DAG carrega sem erros e sem ciclos)
 
 ### ENG-03 · Pipeline de CI no GitHub Actions
 `eng-software` · 🔴 Alta · `M`

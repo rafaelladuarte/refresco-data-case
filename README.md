@@ -14,9 +14,10 @@ Pipeline de dados **Bronze → Silver → Gold** que transforma arquivos de vend
 4. [Regras de negócio](#-regras-de-negócio)
 5. [Qualidade de dados](#-qualidade-de-dados)
 6. [Como executar](#-como-executar)
-7. [Estrutura do repositório](#-estrutura-do-repositório)
-8. [Limitações conhecidas](#-limitações-conhecidas)
-9. [Roadmap](#-roadmap)
+7. [Como rodar os testes](#-como-rodar-os-testes)
+8. [Estrutura do repositório](#-estrutura-do-repositório)
+9. [Limitações conhecidas](#-limitações-conhecidas)
+10. [Roadmap](#-roadmap)
 
 ---
 
@@ -178,6 +179,30 @@ docker compose up -d --build
 
 ---
 
+## 🧪 Como rodar os testes
+
+Os testes unitários rodam fora do Docker, em Python 3.12 (`.python-version`). As versões fixadas não têm wheels para o 3.13.
+
+```bash
+python -m venv .venv && source .venv/bin/activate   # com pyenv, o 3.12 é selecionado pelo .python-version
+pip install -r requirements-dev.txt
+
+pytest --cov                                    # testes + gate de 80% (pipeline/common e funções de regra)
+coverage report --include='pipeline/*' --fail-under=0   # relatório completo, sem gate
+```
+
+- `tests/unit/`: funções puras (validação de vendas, dedup de clientes, datas, mapeamentos do financeiro, normalizações, configuração, storage e ingestão de clima com respostas HTTP simuladas). Não precisam de MinIO, Postgres nem rede.
+- `tests/integration/test_dag.py`: integridade da DAG (importação, 14 tasks, dependências, `max_active_runs=1`). Precisa do Airflow, então é pulado no virtualenv. Dentro da imagem:
+
+```bash
+docker run --rm --entrypoint bash -v "$PWD:/opt/airflow/repo:ro" -w /opt/airflow/repo refresco-data-case-airflow-init \
+  -c 'pip install -q --target /tmp/pt pytest==8.3.4 && PYTHONPATH=/tmp/pt python -m pytest tests/integration -p no:cacheprovider'
+```
+
+As funções `main()`, que só fazem entrada e saída (S3/Postgres), ficam fora do gate e são cobertas pela execução de ponta a ponta.
+
+---
+
 ## 📁 Estrutura do repositório
 
 ```
@@ -197,18 +222,20 @@ refresco-data-case/
 │   └── macros/                   # generate_schema_name
 ├── streamlit/                    # Dashboard (imagem própria)
 ├── data/raw/                     # CSVs de origem
+├── tests/                        # unit/ (pytest, sem infraestrutura) e integration/ (DAG)
 ├── notebooks/exploration/        # Exploração e prototipação da limpeza
 ├── docs/
 │   ├── arquitetura_dados.md      # Componentes, DAG, ER e testes
 │   ├── decisoes_tratamento.md    # ADRs das decisões de dados
 │   ├── diagnostico_orfaos_silver.md  # Diagnóstico histórico (resolvido)
-│   ├── backlog/SPRINT-01.md      # Plano e resultados da Sprint 1
+│   ├── backlog/SPRINT-0*.md      # Planos e resultados das sprints
 │   └── sql/                      # Consultas exploratórias (legado, fora do pipeline)
 ├── BACKLOG.md                    # Quadro Kanban de melhorias
 ├── docker-compose.yml
 ├── Dockerfile                    # Airflow 2.9.0 / Python 3.12 + constraints oficial
 ├── requirements.txt              # Runtime da imagem do Airflow (versões fixas)
 ├── requirements-dev.txt          # Testes e notebooks
+├── pyproject.toml                # Configuração do pytest e da cobertura
 └── .env.example
 ```
 

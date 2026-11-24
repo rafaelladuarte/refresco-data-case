@@ -123,6 +123,12 @@ pipeline/common/
 
 - **Integridade da DAG** (`tests/integration/test_dag.py`, marcado como `airflow`): a DAG carrega sem erros de importação, tem 14 tasks, `max_active_runs == 1` e as dependências esperadas. Roda no job e2e, dentro da imagem do Airflow. No job unitário é pulado, porque o Airflow não é instalado lá.
 - **Validação:** `pytest` verde localmente (Python 3.12) e cobertura ≥ 80% nos módulos do gate (D3).
+- **Resultado da execução:**
+  - `.python-version` (3.12), virtualenv com `requirements-dev.txt` (mais `requests`, `pytest-cov` e `coverage` fixados) e `pyproject.toml` com a configuração do pytest e da cobertura.
+  - Para testar os mapeamentos do financeiro isoladamente, eles saíram do `main()` e viraram `MAP_TIPO_LANCAMENTO`/`MAP_STATUS`, `normalize_tipo_lancamento`, `normalize_status` e `parse_competencia`. O e2e rodou de novo depois disso: os 28 fingerprints continuam idênticos ao baseline, assim como o resumo do dbt e o log.
+  - **160 testes unitários passando**, 1 pulado (o teste da DAG, sem Airflow no virtualenv), em ~2 s. Os casos da tabela acima foram cobertos, além de `fetch_all_weather_data` (falha parcial e total), `require_env`, `S3Config`/`PostgresConfig` e `storage` (com filesystem simulado).
+  - **Gate da D3:** 100% nos módulos do gate (`pipeline/common/*`, `clean_clientes`, `clean_financeiro`, `clean_vendas`; `main()` excluído). Configurado com `fail_under = 80` no `pyproject.toml`. O teste negativo, rodando só um arquivo de teste, reprova com exit 1. O `clean_produtos` entra no gate no DQ-09, quando ganhar funções de regra.
+  - Integridade da DAG na imagem do Airflow: 4/4 testes passando (importação sem erros nem ciclos, 14 tasks com as dependências esperadas, `max_active_runs == 1`, dbt com `HOST_UID:HOST_GID` e `HOME=/tmp`).
 
 #### DQ-09 · Custo unitário *(depende da D1)*
 - **`clean_produtos.py`:** `custo_unitario <= 0` ou nulo vira `NULL` com `custo_disponivel = false`, e o log lista os produtos. `preco_tabela <= 0` segue a mesma regra, com a flag `preco_disponivel`. Testes unitários escritos junto.
