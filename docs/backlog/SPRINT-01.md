@@ -227,6 +227,13 @@ Fase 6 – Validação    execução ponta a ponta + checklist da seção 5
   - O realizado (já com a regra `entra_volume` da DQ-06) é agregado por canal, com `left join` nas metas somadas por canal.
   - **O contrato de colunas é mantido** (`canal`, `volume_realizado_caixas`, `receita_realizada`, `meta_volume_caixas`, `percentual_atingimento`, `total_vendas_realizadas`), para não quebrar o `streamlit/main.py:281-317`.
 - **Validação:** o `percentual_atingimento` varia entre canais e não é mais constante (`1/fator`).
+- **Resultado da execução:**
+  - Metas fictícias fixas por canal/mês (Atacado 220, Conveniência 170, Food Service 200, Supermercado 160 e Varejo Tradicional 180 caixas/mês em 2024), escolhidas uma vez e documentadas como fictícias no YAML do seed e no dashboard.
+  - Testes do seed: combinação única (canal, ano, mês), `not_null`, faixas de `mes`/meta e `relationships` de `canal` com `dim_cliente.canal` (pega erro de grafia ou acento).
+  - `vw_q2` cruza realizado e meta no grão canal × ano × mês (`FULL OUTER JOIN`), então mês sem venda conta como meta não atingida. O contrato de colunas do dashboard foi mantido.
+  - Atingimento: Atacado 93,33%, Conveniência 104,22%, Food Service 100,71%, Supermercado 92,97%, Varejo Tradicional 98,56%. `Não informado` aparece sem meta.
+  - Streamlit: descrição da Q2 informa que as metas são fictícias, e o rótulo da barra de meta fica vazio (não "nan") quando não há meta.
+  - dbt: 2 seeds, 65 testes PASS.
 
 ### Fase 5: Documentação
 

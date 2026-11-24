@@ -83,9 +83,9 @@ Todos os CSVs são lidos como `latin1`, mas só `clientes.csv` é ISO-8859; `ven
 
 - **Arquivos:** `dbt/models/marts/analytics/vw_q2_volume_vs_meta.sql:19-28`
 - **Critérios de aceite:**
-  - [ ] `dbt/seeds/metas_canal_mes.csv` (canal, ano, mes, meta_volume_caixas)
-  - [ ] `vw_q2` faz join com `ref('metas_canal_mes')`
-  - [ ] Seed documentado e testado (`not_null`, `unique` na combinação canal+ano+mes)
+  - [x] `dbt/seeds/metas_canal_mes.csv` (canal, ano, mes, meta_volume_caixas)
+  - [x] `vw_q2` faz join com `ref('metas_canal_mes')`
+  - [x] Seed documentado e testado (`not_null`, `unique` na combinação canal+ano+mes)
 
 ### DQ-06 · Considerar `tipo_lancamento` nas views analíticas
 `qualidade-dados` · 🟠 Média · `P`

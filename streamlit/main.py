@@ -275,8 +275,9 @@ st.markdown("---")
 
 st.markdown('<p class="section-title">Q2 — Volume Realizado vs. Meta por Canal</p>', unsafe_allow_html=True)
 st.markdown(
-    '<p class="section-desc">Comparativo entre o volume de caixas efetivamente vendido e a meta projetada '
-    'por canal de distribuição.</p>',
+    '<p class="section-desc">Comparativo entre o volume de caixas efetivamente vendido e a meta '
+    'por canal de distribuição. As metas são fictícias (seed <code>metas_canal_mes</code>), '
+    'pois a base de origem não possui metas; canais sem meta aparecem sem barra de meta.</p>',
     unsafe_allow_html=True,
 )
 
@@ -318,7 +319,7 @@ fig_q2.add_trace(go.Bar(
     x=df_q2["canal"],
     y=df_q2["meta_volume_caixas"],
     marker_color="#ADB5BD",
-    text=df_q2["meta_volume_caixas"].apply(lambda v: f"{v:,.0f}"),
+    text=df_q2["meta_volume_caixas"].apply(lambda v: f"{v:,.0f}" if pd.notna(v) else ""),
     textposition="outside",
 ))
 fig_q2.update_layout(
