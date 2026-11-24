@@ -8,14 +8,37 @@ Pipeline de dados **Bronze → Silver → Gold** que transforma arquivos de vend
 
 ## 📑 Sumário
 
-1. [Arquitetura](#-arquitetura)
-2. [Modelo de dados](#-modelo-de-dados)
-3. [Regras de negócio](#-regras-de-negócio)
-4. [Qualidade de dados](#-qualidade-de-dados)
-5. [Como executar](#-como-executar)
-6. [Estrutura do repositório](#-estrutura-do-repositório)
-7. [Limitações conhecidas](#-limitações-conhecidas)
-8. [Roadmap](#-roadmap)
+1. [A aplicação rodando](#-a-aplicação-rodando)
+2. [Arquitetura](#-arquitetura)
+3. [Modelo de dados](#-modelo-de-dados)
+4. [Regras de negócio](#-regras-de-negócio)
+5. [Qualidade de dados](#-qualidade-de-dados)
+6. [Como executar](#-como-executar)
+7. [Estrutura do repositório](#-estrutura-do-repositório)
+8. [Limitações conhecidas](#-limitações-conhecidas)
+9. [Roadmap](#-roadmap)
+
+---
+
+## 📸 A aplicação rodando
+
+Capturas da validação final da Sprint 1, em um ambiente recriado do zero (`docker compose down -v`).
+
+**Airflow: DAG `dag_etl_pipeline` com as 14 tasks concluídas.** Bronze e Silver rodam com `PythonOperator`; o dbt roda em containers efêmeros via `DockerOperator`.
+
+![DAG no Airflow: grafo de tasks](docs/images/airflow_dag_graph.png)
+
+![DAG no Airflow: histórico de execuções](docs/images/airflow_dag_grid.png)
+
+**Dashboard Streamlit: Q1 (ranking por região) e Q2 (volume vs. meta por canal; metas fictícias).**
+
+![Dashboard: Q1 e Q2](docs/images/dashboard_q1_q2.png)
+
+**Dashboard Streamlit: Q3 (tendência com média móvel de 7 dias) e Q4 (margem bruta por SKU).**
+
+![Dashboard: Q3 e Q4](docs/images/dashboard_q3_q4.png)
+
+> Na Q4, `Del Valle Pêssego` e `Burn Energy` aparecem com margem de 100% porque a origem traz `custo_unitario = 0.00`. O problema foi identificado na validação e está no backlog (card DQ-09).
 
 ---
 
@@ -198,6 +221,8 @@ Limitações assumidas conscientemente, com o card correspondente no [BACKLOG](B
 | A carga usa `DROP TABLE ... CASCADE` e tipos inferidos pelo pandas | Força recriar as views `stg_*` a cada execução | ARQ-03 |
 | O incremental da fato filtra por `data_emissao` | Status financeiro atualizado depois não é reprocessado | MOD-01 |
 | Sem testes unitários Python e sem CI | Validação manual e pelos testes dbt | ENG-02, ENG-03 |
+| Execuções simultâneas corromperiam a Silver (`rm` + escrita) | Mitigado com `max_active_runs=1`; a correção estrutural é a escrita atômica | ARQ-01, ARQ-02 |
+| `custo_unitario = 0` na origem para 2 produtos, sem validação | Margem de 100% na Q4 para esses SKUs | DQ-09 |
 | As metas são fictícias e os dados são sintéticos, com tipos de lançamento uniformes | Números ilustrativos, não comerciais | — |
 | Clima de uma única coordenada (Uberlândia) para 4 mesorregiões | Correlação clima × vendas aproximada | backlog |
 | `docker.sock` montado no Airflow | Equivale a acesso root no host; aceitável só em ambiente local | — |
@@ -207,5 +232,5 @@ Limitações assumidas conscientemente, com o card correspondente no [BACKLOG](B
 
 ## 🗺️ Roadmap
 
-- **Sprint 1:** qualidade de dados, regras de negócio, reprodutibilidade e documentação. Plano e resultados em [docs/backlog/SPRINT-01.md](docs/backlog/SPRINT-01.md).
+- **Sprint 1 (concluída em 24/11/2026):** qualidade de dados, regras de negócio, reprodutibilidade e documentação. Plano e resultados em [docs/backlog/SPRINT-01.md](docs/backlog/SPRINT-01.md).
 - **Próximas sprints:** testes unitários e CI, ingestão idempotente por `logical_date`, escrita atômica, incremental com merge e auditoria de qualidade. Detalhes no [BACKLOG.md](BACKLOG.md).

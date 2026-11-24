@@ -16,167 +16,43 @@ Para mover um card, recorte-o e cole na coluna correspondente. Marque os critér
 
 | Coluna | Cards |
 |---|---|
-| 🔜 A Fazer — Sprint 1 (curto prazo) | 13 |
-| 📦 Backlog — Sprint 2 (médio prazo) | 11 |
-| 🧊 Backlog — Futuro (longo prazo) | 9 |
+| 🔜 A Fazer | 0 |
+| 📦 Backlog — Sprint 2 (médio prazo) | 13 |
+| 🧊 Backlog — Futuro (longo prazo) | 10 |
 | 🚧 Em Andamento | 0 |
 | 👀 Em Revisão | 0 |
-| ✅ Concluído | 0 |
+| ✅ Concluído | 13 (Sprint 1) + 1 extra |
 
 ---
 
-## 🔜 A Fazer — Sprint 1 (curto prazo)
+## 🔜 A Fazer
 
-> Objetivo: corrigir o que altera os números do dashboard e alinhar o que está documentado com o que está implementado.
-
-### DQ-01 · Corrigir encoding na ingestão Bronze
-`bug` · 🔴 Alta · `P`
-
-Todos os CSVs são lidos como `latin1`, mas só `clientes.csv` é ISO-8859; `vendas`, `produtos` e `financeiro` são UTF-8. Resultado: `canal_venda` chega como `ConveniÃªncia` na fato e na `dim_representante`.
-
-- **Arquivos:** `pipeline/bronze/ingest_csv.py:62`, `pipeline/silver/clean_produtos.py:13`, `pipeline/silver/clean_financeiro.py:10`
-- **Critérios de aceite:**
-  - [x] Encoding definido por arquivo (mapa de configuração) ou detectado automaticamente
-  - [x] Bronze gravada sempre em UTF-8
-  - [x] Funções `fix_encoding` removidas da Silver
-  - [ ] `select distinct canal_venda from gold.dim_representante` sem caracteres corrompidos — _validado na Silver (`canal_venda` = `Conveniência`); conferência na Gold na validação final da sprint_
-
-### DQ-02 · Corrigir coordenadas da API de clima
-`bug` · 🔴 Alta · `P`
-
-`-21.78, -43.35` é Juiz de Fora. Uberlândia ≈ `-18.92, -48.28`.
-
-- **Arquivos:** `pipeline/bronze/ingest_clima.py:12-13`, `:45-46`, `:79`
-- **Critérios de aceite:**
-  - [x] Latitude/longitude e período parametrizados (env/config), não hardcoded
-  - [x] Período derivado das datas de venda (ou do `logical_date`), não `range(2020, 2026)` fixo — _conforme o plano aprovado: período via `CLIMA_ANO_INICIO`/`CLIMA_ANO_FIM` (sem `range` fixo); derivação pelo `logical_date` fica no ARQ-01_
-  - [x] Constantes mortas removidas (`API_URL`, `OPEN_METEO_API_URL` do `.env.example`)
-
-### DQ-03 · Eliminar o valor `"nan"` como string
-`bug` · 🔴 Alta · `P`
-
-`astype(str)` transforma `NaN` em `"nan"`, o que torna os filtros `notna()` código morto e obriga a view Q2 a ter `WHEN c.canal = 'nan'`.
-
-- **Arquivos:** `pipeline/silver/clean_clientes.py:55,73-74`, `clean_produtos.py:43`, `clean_financeiro.py:42,57`, `dbt/models/marts/analytics/vw_q2_volume_vs_meta.sql:6`
-- **Critérios de aceite:**
-  - [x] Uso de `.astype("string")` (dtype nullable) ou tratamento explícito de nulos
-  - [x] Nenhum valor literal `'nan'` em `load_stage.*`
-  - [x] Remendo removido da `vw_q2`
-
-### DQ-04 · Validar medidas de vendas (desconto, quantidade, preço)
-`qualidade-dados` · 🔴 Alta · `M`
-
-`desconto_pct` chega a **20.73** (deveria ser `< 1`) e há 6 vendas com `qtd_caixas <= 0`, o que gera `receita_liquida` negativa. A `vw_q4` esconde isso com `receita_liquida > 0`.
-
-- **Arquivos:** `pipeline/silver/clean_vendas.py:144-148`, `dbt/models/marts/analytics/vw_q4_margem_bruta.sql:24`
-- **Critérios de aceite:**
-  - [x] Regras: `0 <= desconto_pct < 1`, `qtd_caixas > 0`, `preco_unitario > 0`
-  - [x] Registros inválidos vão para a quarentena com `motivo_rejeicao`
-  - [x] Filtro `receita_liquida > 0` removido da `vw_q4`
-  - [x] Testes dbt (`dbt_utils.accepted_range`) nas colunas de `stg_vendas`
-  - [x] _(escopo ampliado)_ Datas em `DD/MM/AA` e `DD-MM-AAAA` reconhecidas; data inválida vai para a quarentena em vez de ser descartada em silêncio
-
-### DQ-05 · Substituir meta circular da Q2 por seed de metas
-`bug` · 🔴 Alta · `P`
-
-`meta = realizado × fator`, então o atingimento é sempre `1/fator` (≈ 90,9%). A métrica não informa nada.
-
-- **Arquivos:** `dbt/models/marts/analytics/vw_q2_volume_vs_meta.sql:19-28`
-- **Critérios de aceite:**
-  - [x] `dbt/seeds/metas_canal_mes.csv` (canal, ano, mes, meta_volume_caixas)
-  - [x] `vw_q2` faz join com `ref('metas_canal_mes')`
-  - [x] Seed documentado e testado (`not_null`, `unique` na combinação canal+ano+mes)
-
-### DQ-06 · Considerar `tipo_lancamento` nas views analíticas
-`qualidade-dados` · 🟠 Média · `P`
-
-As views filtram só por `status = 'PAGO'`, então devoluções e bonificações contam como receita.
-
-- **Arquivos:** `vw_q1_ranking_vendas.sql`, `vw_q3_tendencia_volume.sql`, `vw_q4_margem_bruta.sql`
-- **Critérios de aceite:**
-  - [x] Regra de negócio definida e documentada (ex.: só `VENDA` entra em receita; `DEVOLUCAO` é subtraída)
-  - [x] Regra aplicada de forma consistente nas 4 views
-
-### DQ-07 · Clima no grão diário na `dim_tempo`
-`modelagem` · 🟠 Média · `P`
-
-O join é por `(ano, mes)`, então cada dia carrega a média e a soma de precipitação do mês inteiro.
-
-- **Arquivos:** `dbt/models/marts/gold/dim_tempo.sql:47-77`
-- **Critérios de aceite:**
-  - [x] Join por `data_completa = data_clima::date`
-  - [x] Agregados mensais, se necessários, em colunas próprias (`clima_temp_max_media_mes`)
-  - [x] Comentário desatualizado ("apenas 2024") corrigido, assim como os limites `warn_if`/`error_if` no `schema.yml`
-  - [x] _(extra)_ Teste singular `assert_clima_cobre_dias_com_venda`: falha se algum dia com venda ficar sem clima
-
-### DQ-08 · Deduplicar clientes pela chave natural
-`bug` · 🔴 Alta · `P`
-
-`clean_clientes` deduplica por `cnpj` (há 5 CNPJs duplicados), não por `id_cliente`.
-
-> Atualizado na Sprint 1: o dedup por CNPJ mantinha os recadastros sem vendas (C0200–C0204) e descartava os originais (C0001–C0005), mandando as vendas deles para a quarentena como órfãs. Além disso, o empate em `_ingested_at` fazia o resultado variar entre execuções.
-
-- **Arquivos:** `pipeline/silver/clean_clientes.py:76-77`
-- **Critérios de aceite:**
-  - [x] Dedup por `id_cliente` (mais recente por `_ingested_at`)
-  - [x] CNPJs duplicados entre clientes distintos registrados na quarentena/log como alerta
-
-### INF-01 · Fixar versões de dependências e imagens
-`infra` · 🔴 Alta · `P`
-
-`requirements.txt` não fixa versões e inclui `apache-airflow` dentro da imagem do Airflow, o que pode trocar a versão no build. Há versões inconsistentes entre Pipfile (3.13), imagem (3.12), `.env.example` (2.7.1) e Dockerfile (2.9.0), além de tags `:latest`.
-
-- **Arquivos:** `requirements.txt`, `Dockerfile`, `Pipfile`, `.env.example`, `docker-compose.yml`
-- **Critérios de aceite:**
-  - [x] `apache-airflow` removido do `requirements.txt`; instalação com o constraints file oficial
-  - [x] Versões fixadas (`pandas==`, `s3fs==`, …)
-  - [x] `pytest` movido para dependências de desenvolvimento
-  - [x] Tags explícitas para MinIO, pgAdmin e dbt (`dbt-postgres:1.8.x`)
-  - [x] Uma única fonte de verdade para a versão do Python e do Airflow
-
-### INF-02 · Remover segredos e credenciais hardcoded
-`infra` · 🟠 Média · `P`
-
-- **Arquivos:** `docker-compose.yml:15` (Fernet key), `:41-43`, `:77-78`, `:91-92`, `:115-121`; defaults `"minio123"` em todos os scripts
-- **Critérios de aceite:**
-  - [x] Fernet key, senhas do Airflow/pgAdmin/MinIO vindas do `.env`
-  - [x] Scripts falham explicitamente sem credencial (sem default de senha)
-  - [x] `.env.example` com todas as variáveis necessárias
-
-### INF-03 · Limpar serviços e artefatos sem uso
-`infra` · 🟢 Baixa · `P`
-
-- **Itens:**
-  - [x] Remover o serviço `dbt-core` (`tail -f /dev/null`), já que o dbt roda via DockerOperator
-  - [x] Remover `init/01_schema.sql` (tabela `gold_vendas` não utilizada)
-  - [x] Montar `docker.sock` como read-only ou ajustar o README — _decidido manter leitura/escrita (`:ro` não restringe a API); risco documentado no compose, README e `docs/arquitetura_dados.md` atualizados no DOC-01_
-  - [x] Parametrizar o GID `984` (`DOCKER_GID` no `.env`)
-
-### DOC-01 · Alinhar README com o código
-`docs` · 🔴 Alta · `M`
-
-O README descreve funcionalidades que não existem. Para quem avalia, isso pesa mais do que a falta de uma funcionalidade.
-
-- **Critérios de aceite:**
-  - [x] Diagrama ER com as colunas reais (sem `id_representante` nem `receita_bruta`)
-  - [x] Quarentena descrita como está implementada (ou depois do ARQ-05)
-  - [x] Passo `airflow db init` removido (o `airflow-init` já faz a migração)
-  - [x] Estrutura de pastas atualizada (sem `perguntas.sql`, com `streamlit/` e `notebooks/`)
-  - [x] Seção "Limitações conhecidas" e link para este `BACKLOG.md`
-
-### DOC-02 · Atualizar documentos de decisão
-`docs` · 🟢 Baixa · `P`
-
-- **Critérios de aceite:**
-  - [x] `docs/decisoes_tratamento.md` preenchido (formato ADR: contexto, decisão, consequências) ou removido
-  - [x] `docs/diagnostico_orfaos_silver.md` marcado como **resolvido**, com referência ao commit da correção
-  - [x] Comentário da DAG (`dags/etl_pipeline.py:125-130`) corrigido: as views somem por causa do `DROP ... CASCADE`, não do container efêmero
+_Nenhum card. Sprint 1 concluída em 24/11/2026; próximos cards serão puxados do Backlog — Sprint 2._
 
 ---
 
 ## 📦 Backlog — Sprint 2 (médio prazo)
 
 > Objetivo: demonstrar engenharia de software e boas práticas de pipeline.
+
+### DQ-09 · Validar custo unitário de produtos
+`qualidade-dados` · 🟠 Média · `P`
+
+_Achado na validação final da Sprint 1._ `P012` (Del Valle Pêssego) e `P019` (Burn Energy) chegam com `custo_unitario = 0.00` na origem e aparecem na Q4 com margem de 100%. Nenhuma regra valida custo hoje.
+
+- **Critérios de aceite:**
+  - [ ] Regra na Silver de produtos: `custo_unitario > 0` e `preco_tabela > 0` (ou custo zero sinalizado explicitamente)
+  - [ ] Produto inválido vai para quarentena, ou é mantido com flag `custo_indisponivel` e excluído da margem (decisão de negócio)
+  - [ ] Teste dbt em `dim_produto.custo_unitario`
+
+### INF-04 · Artefatos do dbt criados como root
+`infra` · 🟢 Baixa · `P`
+
+_Achado na Sprint 1._ O container dbt roda como root, então `dbt/logs`, `dbt/target` e `dbt/dbt_packages` ficam com dono `root` no host e atrapalham quem roda o dbt fora do Docker.
+
+- **Critérios de aceite:**
+  - [ ] DockerOperator executa o dbt com o UID/GID do host (`user=`) ou os artefatos vão para um volume dedicado
+  - [ ] Documentado no README
 
 ### ENG-01 · Criar módulo compartilhado `pipeline/common/`
 `eng-software` · 🔴 Alta · `M`
@@ -349,6 +225,14 @@ As dimensões se dizem SCD1, mas o histórico de canal e representante do client
   - [ ] `contract: {enforced: true}` nos modelos da Gold
   - [ ] Violação de contrato gera quarentena (Silver) ou falha de build (Gold)
 
+### DQ-10 · Clima por região
+`evolução` · 🟢 Baixa · `M`
+
+Os clientes estão em 4 mesorregiões de MG, mas o clima vem de uma única coordenada (Uberlândia).
+
+- [ ] Coordenada representativa por região (seed `regioes_coordenadas`)
+- [ ] Ingestão de clima por região e join por (região do cliente, data)
+
 ### EVO-01 · Astronomer Cosmos para tasks dbt por modelo *(opcional)*
 `evolução` · 🟢 Baixa · `M`
 
@@ -393,4 +277,153 @@ _Nenhum card._
 
 ## ✅ Concluído
 
-_Nenhum card._
+> **Sprint 1** — concluída em 24/11/2026. Plano, decisões e resultados: [`docs/backlog/SPRINT-01.md`](docs/backlog/SPRINT-01.md).
+
+### DQ-01 · Corrigir encoding na ingestão Bronze
+`bug` · 🔴 Alta · `P`
+
+Todos os CSVs são lidos como `latin1`, mas só `clientes.csv` é ISO-8859; `vendas`, `produtos` e `financeiro` são UTF-8. Resultado: `canal_venda` chega como `ConveniÃªncia` na fato e na `dim_representante`.
+
+- **Arquivos:** `pipeline/bronze/ingest_csv.py:62`, `pipeline/silver/clean_produtos.py:13`, `pipeline/silver/clean_financeiro.py:10`
+- **Critérios de aceite:**
+  - [x] Encoding definido por arquivo (mapa de configuração) ou detectado automaticamente
+  - [x] Bronze gravada sempre em UTF-8
+  - [x] Funções `fix_encoding` removidas da Silver
+  - [x] `select distinct canal_venda from gold.dim_representante` sem caracteres corrompidos — _validado na Gold na validação final (0 valores corrompidos)_
+
+### DQ-02 · Corrigir coordenadas da API de clima
+`bug` · 🔴 Alta · `P`
+
+`-21.78, -43.35` é Juiz de Fora. Uberlândia ≈ `-18.92, -48.28`.
+
+- **Arquivos:** `pipeline/bronze/ingest_clima.py:12-13`, `:45-46`, `:79`
+- **Critérios de aceite:**
+  - [x] Latitude/longitude e período parametrizados (env/config), não hardcoded
+  - [x] Período derivado das datas de venda (ou do `logical_date`), não `range(2020, 2026)` fixo — _conforme o plano aprovado: período via `CLIMA_ANO_INICIO`/`CLIMA_ANO_FIM` (sem `range` fixo); derivação pelo `logical_date` fica no ARQ-01_
+  - [x] Constantes mortas removidas (`API_URL`, `OPEN_METEO_API_URL` do `.env.example`)
+
+### DQ-03 · Eliminar o valor `"nan"` como string
+`bug` · 🔴 Alta · `P`
+
+`astype(str)` transforma `NaN` em `"nan"`, o que torna os filtros `notna()` código morto e obriga a view Q2 a ter `WHEN c.canal = 'nan'`.
+
+- **Arquivos:** `pipeline/silver/clean_clientes.py:55,73-74`, `clean_produtos.py:43`, `clean_financeiro.py:42,57`, `dbt/models/marts/analytics/vw_q2_volume_vs_meta.sql:6`
+- **Critérios de aceite:**
+  - [x] Uso de `.astype("string")` (dtype nullable) ou tratamento explícito de nulos
+  - [x] Nenhum valor literal `'nan'` em `load_stage.*`
+  - [x] Remendo removido da `vw_q2`
+
+### DQ-04 · Validar medidas de vendas (desconto, quantidade, preço)
+`qualidade-dados` · 🔴 Alta · `M`
+
+`desconto_pct` chega a **20.73** (deveria ser `< 1`) e há 6 vendas com `qtd_caixas <= 0`, o que gera `receita_liquida` negativa. A `vw_q4` esconde isso com `receita_liquida > 0`.
+
+- **Arquivos:** `pipeline/silver/clean_vendas.py:144-148`, `dbt/models/marts/analytics/vw_q4_margem_bruta.sql:24`
+- **Critérios de aceite:**
+  - [x] Regras: `0 <= desconto_pct < 1`, `qtd_caixas > 0`, `preco_unitario > 0`
+  - [x] Registros inválidos vão para a quarentena com `motivo_rejeicao`
+  - [x] Filtro `receita_liquida > 0` removido da `vw_q4`
+  - [x] Testes dbt (`dbt_utils.accepted_range`) nas colunas de `stg_vendas`
+  - [x] _(escopo ampliado)_ Datas em `DD/MM/AA` e `DD-MM-AAAA` reconhecidas; data inválida vai para a quarentena em vez de ser descartada em silêncio
+
+### DQ-05 · Substituir meta circular da Q2 por seed de metas
+`bug` · 🔴 Alta · `P`
+
+`meta = realizado × fator`, então o atingimento é sempre `1/fator` (≈ 90,9%). A métrica não informa nada.
+
+- **Arquivos:** `dbt/models/marts/analytics/vw_q2_volume_vs_meta.sql:19-28`
+- **Critérios de aceite:**
+  - [x] `dbt/seeds/metas_canal_mes.csv` (canal, ano, mes, meta_volume_caixas)
+  - [x] `vw_q2` faz join com `ref('metas_canal_mes')`
+  - [x] Seed documentado e testado (`not_null`, `unique` na combinação canal+ano+mes)
+
+### DQ-06 · Considerar `tipo_lancamento` nas views analíticas
+`qualidade-dados` · 🟠 Média · `P`
+
+As views filtram só por `status = 'PAGO'`, então devoluções e bonificações contam como receita.
+
+- **Arquivos:** `vw_q1_ranking_vendas.sql`, `vw_q3_tendencia_volume.sql`, `vw_q4_margem_bruta.sql`
+- **Critérios de aceite:**
+  - [x] Regra de negócio definida e documentada (ex.: só `VENDA` entra em receita; `DEVOLUCAO` é subtraída)
+  - [x] Regra aplicada de forma consistente nas 4 views
+
+### DQ-07 · Clima no grão diário na `dim_tempo`
+`modelagem` · 🟠 Média · `P`
+
+O join é por `(ano, mes)`, então cada dia carrega a média e a soma de precipitação do mês inteiro.
+
+- **Arquivos:** `dbt/models/marts/gold/dim_tempo.sql:47-77`
+- **Critérios de aceite:**
+  - [x] Join por `data_completa = data_clima::date`
+  - [x] Agregados mensais, se necessários, em colunas próprias (`clima_temp_max_media_mes`)
+  - [x] Comentário desatualizado ("apenas 2024") corrigido, assim como os limites `warn_if`/`error_if` no `schema.yml`
+  - [x] _(extra)_ Teste singular `assert_clima_cobre_dias_com_venda`: falha se algum dia com venda ficar sem clima
+
+### DQ-08 · Deduplicar clientes pela chave natural
+`bug` · 🔴 Alta · `P`
+
+`clean_clientes` deduplica por `cnpj` (há 5 CNPJs duplicados), não por `id_cliente`.
+
+> Atualizado na Sprint 1: o dedup por CNPJ mantinha os recadastros sem vendas (C0200–C0204) e descartava os originais (C0001–C0005), mandando as vendas deles para a quarentena como órfãs. Além disso, o empate em `_ingested_at` fazia o resultado variar entre execuções.
+
+- **Arquivos:** `pipeline/silver/clean_clientes.py:76-77`
+- **Critérios de aceite:**
+  - [x] Dedup por `id_cliente` (mais recente por `_ingested_at`)
+  - [x] CNPJs duplicados entre clientes distintos registrados na quarentena/log como alerta
+
+### INF-01 · Fixar versões de dependências e imagens
+`infra` · 🔴 Alta · `P`
+
+`requirements.txt` não fixa versões e inclui `apache-airflow` dentro da imagem do Airflow, o que pode trocar a versão no build. Há versões inconsistentes entre Pipfile (3.13), imagem (3.12), `.env.example` (2.7.1) e Dockerfile (2.9.0), além de tags `:latest`.
+
+- **Arquivos:** `requirements.txt`, `Dockerfile`, `Pipfile`, `.env.example`, `docker-compose.yml`
+- **Critérios de aceite:**
+  - [x] `apache-airflow` removido do `requirements.txt`; instalação com o constraints file oficial
+  - [x] Versões fixadas (`pandas==`, `s3fs==`, …)
+  - [x] `pytest` movido para dependências de desenvolvimento
+  - [x] Tags explícitas para MinIO, pgAdmin e dbt (`dbt-postgres:1.8.x`)
+  - [x] Uma única fonte de verdade para a versão do Python e do Airflow
+
+### INF-02 · Remover segredos e credenciais hardcoded
+`infra` · 🟠 Média · `P`
+
+- **Arquivos:** `docker-compose.yml:15` (Fernet key), `:41-43`, `:77-78`, `:91-92`, `:115-121`; defaults `"minio123"` em todos os scripts
+- **Critérios de aceite:**
+  - [x] Fernet key, senhas do Airflow/pgAdmin/MinIO vindas do `.env`
+  - [x] Scripts falham explicitamente sem credencial (sem default de senha)
+  - [x] `.env.example` com todas as variáveis necessárias
+
+### INF-03 · Limpar serviços e artefatos sem uso
+`infra` · 🟢 Baixa · `P`
+
+- **Itens:**
+  - [x] Remover o serviço `dbt-core` (`tail -f /dev/null`), já que o dbt roda via DockerOperator
+  - [x] Remover `init/01_schema.sql` (tabela `gold_vendas` não utilizada)
+  - [x] Montar `docker.sock` como read-only ou ajustar o README — _decidido manter leitura/escrita (`:ro` não restringe a API); risco documentado no compose, README e `docs/arquitetura_dados.md` atualizados no DOC-01_
+  - [x] Parametrizar o GID `984` (`DOCKER_GID` no `.env`)
+
+### DOC-01 · Alinhar README com o código
+`docs` · 🔴 Alta · `M`
+
+O README descreve funcionalidades que não existem. Para quem avalia, isso pesa mais do que a falta de uma funcionalidade.
+
+- **Critérios de aceite:**
+  - [x] Diagrama ER com as colunas reais (sem `id_representante` nem `receita_bruta`)
+  - [x] Quarentena descrita como está implementada (ou depois do ARQ-05)
+  - [x] Passo `airflow db init` removido (o `airflow-init` já faz a migração)
+  - [x] Estrutura de pastas atualizada (sem `perguntas.sql`, com `streamlit/` e `notebooks/`)
+  - [x] Seção "Limitações conhecidas" e link para este `BACKLOG.md`
+
+### DOC-02 · Atualizar documentos de decisão
+`docs` · 🟢 Baixa · `P`
+
+- **Critérios de aceite:**
+  - [x] `docs/decisoes_tratamento.md` preenchido (formato ADR: contexto, decisão, consequências) ou removido
+  - [x] `docs/diagnostico_orfaos_silver.md` marcado como **resolvido**, com referência ao commit da correção
+  - [x] Comentário da DAG (`dags/etl_pipeline.py:125-130`) corrigido: as views somem por causa do `DROP ... CASCADE`, não do container efêmero
+
+### ✔ Extra · `max_active_runs=1` e dependências do Streamlit
+`bug` · achados na validação final
+
+- [x] DAG com `max_active_runs=1`: execuções simultâneas misturavam arquivos na Silver e duplicavam a Gold
+- [x] `numpy`/`pyarrow` fixados no Streamlit (Q4 quebrava com `ImportError`) e rótulos dos gráficos Q1/Q4 sem corte

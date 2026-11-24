@@ -1,6 +1,6 @@
 # Sprint 1: plano de implementação
 
-> **Status:** 🟢 Aprovado em 24/11/2026 (todas as decisões conforme as recomendações) · em execução
+> **Status:** ✅ Concluída em 24/11/2026 · aprovada com todas as decisões conforme as recomendações
 > **Escopo:** os 13 cards da coluna "A Fazer — Sprint 1" do [`BACKLOG.md`](../../BACKLOG.md)
 > **Objetivo:** corrigir o que altera os números do dashboard, tornar o build reproduzível e alinhar a documentação com o código.
 
@@ -322,6 +322,32 @@ Removidas: `AIRFLOW_IMAGE_NAME` e `OPEN_METEO_API_URL`.
 **Definição de pronto de cada card:** critérios de aceite do `BACKLOG.md` marcados, commit próprio com o ID do card, DAG verde após a mudança e card movido para "Em Revisão" (ou "Concluído" após o merge).
 
 ---
+
+### Resultado da validação final (24/11/2026)
+
+O ambiente foi recriado do zero com `docker compose down -v` e `up --build`. Para não conflitar com outros projetos na máquina, as portas de host foram remapeadas por um override local, fora do repositório (Airflow 18080, MinIO 19000/19001).
+
+| Verificação | Resultado |
+|---|---|
+| DAG `dag_etl_pipeline` (execução limpa `validacao_sprint1_e2e`) | ✅ 14/14 tasks `success`, ~36 s |
+| `dbt test` completo (staging, gold, seeds e singular) | ✅ 65 PASS, 0 WARN, 0 ERROR |
+| Caracteres `Ã`/`Â` em colunas texto da Gold | ✅ 0 (`canal_venda` = `Conveniência`) |
+| `'nan'` literal em `load_stage` | ✅ 0 |
+| Linhas na `fato_vendas` | ✅ 3.482 (= ids distintos) |
+| Quarentena clientes / vendas | ✅ 5 / 18 |
+| `receita_liquida <= 0` | ✅ 0 |
+| `percentual_atingimento` da Q2 | ✅ varia entre canais (92,97% a 104,22%) |
+| Valores distintos de clima por dia (jan/2024) | ✅ 24 |
+| Tipos considerados em receita | ✅ apenas `VENDA` |
+| Streamlit: 4 seções | ✅ renderizam (após a correção abaixo) |
+
+**Achados da validação e o que foi feito:**
+1. **Execuções simultâneas corrompiam a Gold.** Ao ativar a DAG, o Airflow criou a execução agendada em paralelo à manual. As duas fizeram `rm` + escrita nos mesmos prefixos da Silver, os arquivos se misturaram e `fato_vendas`/`dim_tempo` ficaram duplicadas (testes `unique` falharam). **Correção:** `max_active_runs=1` na DAG. A fato, por ser incremental, manteve as duplicatas até um `dbt run --full-refresh --select fato_vendas`, o que confirma o risco descrito no MOD-01. A correção estrutural continua em ARQ-01/ARQ-02.
+2. **Q4 do Streamlit quebrava** (`ImportError: pyarrow requires NumPy 2.0`). O `streamlit/requirements.txt` não fixava `pyarrow`/`numpy`. **Correção:** `numpy==1.26.4` e `pyarrow==15.0.2`. Os rótulos cortados nos gráficos Q1/Q4 também foram ajustados.
+3. **`custo_unitario = 0.00`** para P012 e P019 na origem (margem de 100% na Q4). Fora do escopo desta sprint, registrado como **DQ-09**.
+4. Artefatos do dbt com dono `root` no host, registrado como **INF-04**. O clima por região foi registrado como **DQ-10**.
+
+As capturas da aplicação rodando estão no README (`docs/images/`).
 
 ## 6. Riscos e mitigação
 
