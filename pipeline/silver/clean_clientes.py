@@ -4,6 +4,7 @@ import logging
 import re
 
 from pipeline.settings import s3_storage_options
+from pipeline.silver.text import clean_text
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -68,7 +69,7 @@ def main():
         
         cols_str = ["nome_cliente", "canal", "regiao", "cidade", "uf", "representante"]
         for col in cols_str:
-            df[col] = df[col].astype(str).str.strip()
+            df[col] = clean_text(df[col])
 
         reparados = 0
         for col in cols_str:

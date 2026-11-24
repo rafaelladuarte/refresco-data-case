@@ -4,6 +4,7 @@ import logging
 import re
 
 from pipeline.settings import s3_storage_options
+from pipeline.silver.text import clean_text
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -127,8 +128,12 @@ def main():
         # 2. Normalização de strings antes de qualquer validação
         #    Garante que espaços em branco não passem despercebidos
         # ------------------------------------------------------------------
-        for col in ["id_venda", "id_cliente", "id_produto", "canal_venda", "representante"]:
+        # IDs: vazio ("") em vez de nulo, pois as regras de validação comparam com string vazia
+        for col in ["id_venda", "id_cliente", "id_produto"]:
             df[col] = df[col].fillna("").astype(str).str.strip()
+        # Atributos descritivos: nulo permanece nulo (sem virar "nan" ou "")
+        for col in ["canal_venda", "representante"]:
+            df[col] = clean_text(df[col])
 
         # ------------------------------------------------------------------
         # 3. Transformações de negócio

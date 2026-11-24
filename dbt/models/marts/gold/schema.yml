@@ -44,6 +44,10 @@ models:
         description: "Chave natural vinda da origem."
         data_tests:
           - not_null
+      - name: canal
+        description: "Canal do cliente. Ausente na origem → 'Não informado' (membro desconhecido)."
+        data_tests:
+          - not_null
 
   - name: dim_produto
     description: "Dimensão de produtos utilizando SCD Tipo 1."

@@ -4,6 +4,7 @@ import logging
 import re
 
 from pipeline.settings import s3_storage_options
+from pipeline.silver.text import clean_text
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -29,7 +30,7 @@ def main():
         logger.info(f"Linhas lidas da Bronze: {len(df)}")
         
         for col in ["nome_produto", "familia", "marca", "embalagem"]:
-            df[col] = df[col].astype(str).str.strip()
+            df[col] = clean_text(df[col])
         
         df["familia"] = df["familia"].str.upper().replace({
             "REFRIGERANTES": "REFRIGERANTE", 

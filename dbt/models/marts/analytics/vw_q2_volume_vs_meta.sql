@@ -2,10 +2,7 @@
 
 WITH volume_realizado AS (
     SELECT 
-        CASE 
-            WHEN c.canal = 'nan' THEN 'Outros'
-            ELSE c.canal
-        END AS canal,
+        c.canal,
         SUM(f.qtd_caixas) AS volume_realizado_caixas,
         COUNT(DISTINCT f.sk_venda) AS total_vendas_realizadas,
         SUM(f.receita_liquida) AS receita_realizada
@@ -13,7 +10,6 @@ WITH volume_realizado AS (
     JOIN {{ ref('dim_cliente') }} c ON f.sk_cliente = c.sk_cliente
     WHERE f.status_financeiro = 'PAGO'
       AND c.ativo = true
-      AND c.canal IS NOT NULL
     GROUP BY 1
 ),
 metas AS (

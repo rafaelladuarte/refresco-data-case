@@ -59,9 +59,9 @@ Todos os CSVs são lidos como `latin1`, mas só `clientes.csv` é ISO-8859; `ven
 
 - **Arquivos:** `pipeline/silver/clean_clientes.py:55,73-74`, `clean_produtos.py:43`, `clean_financeiro.py:42,57`, `dbt/models/marts/analytics/vw_q2_volume_vs_meta.sql:6`
 - **Critérios de aceite:**
-  - [ ] Uso de `.astype("string")` (dtype nullable) ou tratamento explícito de nulos
-  - [ ] Nenhum valor literal `'nan'` em `load_stage.*`
-  - [ ] Remendo removido da `vw_q2`
+  - [x] Uso de `.astype("string")` (dtype nullable) ou tratamento explícito de nulos
+  - [x] Nenhum valor literal `'nan'` em `load_stage.*`
+  - [x] Remendo removido da `vw_q2`
 
 ### DQ-04 · Validar medidas de vendas (desconto, quantidade, preço)
 `qualidade-dados` · 🔴 Alta · `M`
