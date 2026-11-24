@@ -263,6 +263,8 @@ else:
         zeroline=False,
         showticklabels=False,
         title_text="",
+        # folga de 15% à direita para o rótulo "outside" da maior barra não ser cortado
+        range=[0, df_q1_plot["total_receita_liquida"].max() * 1.15],
     )
     fig_q1.update_yaxes(
         title_text="",
@@ -478,18 +480,25 @@ with col_chart:
         text=df_q4_sorted["margem_bruta_percentual"].apply(lambda v: f"{v:.1f}%"),
         textposition="outside",
         textfont=dict(color=FONT_COLOR, size=12),
+        cliponaxis=False,  # rótulos "outside" não são recortados pela área do eixo
     ))
     fig_q4.update_layout(
         **PLOT_LAYOUT,
         title="Margem Bruta % por SKU",
-        height=380,
+        # altura proporcional ao número de SKUs para os rótulos não se sobreporem
+        height=max(380, 24 * len(df_q4_sorted)),
     )
+    # folga nas duas pontas: margens podem ser negativas e os rótulos ficam "outside"
+    q4_min = min(df_q4_sorted["margem_bruta_percentual"].min(), 0)
+    q4_max = df_q4_sorted["margem_bruta_percentual"].max()
+    q4_pad = (q4_max - q4_min) * 0.35
     fig_q4.update_xaxes(
         showgrid=False,
         showline=False,
         zeroline=False,
         showticklabels=False,
         title_text="",
+        range=[q4_min - (q4_pad if q4_min < 0 else 0), q4_max + q4_pad],
     )
     fig_q4.update_yaxes(
         title_text="",

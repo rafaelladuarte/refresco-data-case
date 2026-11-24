@@ -63,6 +63,10 @@ with DAG(
     description='Pipeline ETL completo: Bronze → Silver → load_stage → Gold (dbt)',
     schedule_interval='@daily',
     catchup=False,
+    # Execuções simultâneas corrompem a Silver: cada uma faz rm + escrita nos mesmos
+    # prefixos e os arquivos de ambas se misturam (dados duplicados na Gold).
+    # Escrita atômica/idempotente está no backlog (ARQ-01/ARQ-02).
+    max_active_runs=1,
     tags=['etl', 'pipeline', 'dbt', 'gold'],
 ) as dag:
 
