@@ -260,6 +260,15 @@ Fase 6 – Validação    execução ponta a ponta + checklist da seção 5
 
 ---
 
+### Resultado da execução (Fase 5)
+- **DOC-02:**
+  - `decisoes_tratamento.md` com 8 ADRs: encoding, nulos e membro desconhecido, quarentena, D1, D2, D3, clima e configuração.
+  - Diagnóstico de órfãos marcado como resolvido, com a correção (C0004/C0005 não eram órfãos da origem) e os commits.
+  - Comentário e diagrama da DAG corrigidos.
+- **DOC-01:**
+  - README reescrito, com arquitetura, modelo resumido, regras de negócio, qualidade, execução, estrutura, limitações conhecidas e roadmap.
+  - `docs/arquitetura_dados.md` virou a referência técnica única: componentes, fluxo, DAG, ER real, views e testes. O README aponta para ele, para que os dois diagramas não divirjam de novo.
+
 ## 4. Variáveis novas no `.env`
 
 ```dotenv

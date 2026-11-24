@@ -149,7 +149,7 @@ O join é por `(ano, mes)`, então cada dia carrega a média e a soma de precipi
 - **Itens:**
   - [x] Remover o serviço `dbt-core` (`tail -f /dev/null`), já que o dbt roda via DockerOperator
   - [x] Remover `init/01_schema.sql` (tabela `gold_vendas` não utilizada)
-  - [ ] Montar `docker.sock` como read-only ou ajustar o README — _decidido manter leitura/escrita (`:ro` não restringe a API); risco documentado no compose, README atualizado no DOC-01_
+  - [x] Montar `docker.sock` como read-only ou ajustar o README — _decidido manter leitura/escrita (`:ro` não restringe a API); risco documentado no compose, README e `docs/arquitetura_dados.md` atualizados no DOC-01_
   - [x] Parametrizar o GID `984` (`DOCKER_GID` no `.env`)
 
 ### DOC-01 · Alinhar README com o código
@@ -158,19 +158,19 @@ O join é por `(ano, mes)`, então cada dia carrega a média e a soma de precipi
 O README descreve funcionalidades que não existem. Para quem avalia, isso pesa mais do que a falta de uma funcionalidade.
 
 - **Critérios de aceite:**
-  - [ ] Diagrama ER com as colunas reais (sem `id_representante` nem `receita_bruta`)
-  - [ ] Quarentena descrita como está implementada (ou depois do ARQ-05)
-  - [ ] Passo `airflow db init` removido (o `airflow-init` já faz a migração)
-  - [ ] Estrutura de pastas atualizada (sem `perguntas.sql`, com `streamlit/` e `notebooks/`)
-  - [ ] Seção "Limitações conhecidas" e link para este `BACKLOG.md`
+  - [x] Diagrama ER com as colunas reais (sem `id_representante` nem `receita_bruta`)
+  - [x] Quarentena descrita como está implementada (ou depois do ARQ-05)
+  - [x] Passo `airflow db init` removido (o `airflow-init` já faz a migração)
+  - [x] Estrutura de pastas atualizada (sem `perguntas.sql`, com `streamlit/` e `notebooks/`)
+  - [x] Seção "Limitações conhecidas" e link para este `BACKLOG.md`
 
 ### DOC-02 · Atualizar documentos de decisão
 `docs` · 🟢 Baixa · `P`
 
 - **Critérios de aceite:**
-  - [ ] `docs/decisoes_tratamento.md` preenchido (formato ADR: contexto, decisão, consequências) ou removido
-  - [ ] `docs/diagnostico_orfaos_silver.md` marcado como **resolvido**, com referência ao commit da correção
-  - [ ] Comentário da DAG (`dags/etl_pipeline.py:125-130`) corrigido: as views somem por causa do `DROP ... CASCADE`, não do container efêmero
+  - [x] `docs/decisoes_tratamento.md` preenchido (formato ADR: contexto, decisão, consequências) ou removido
+  - [x] `docs/diagnostico_orfaos_silver.md` marcado como **resolvido**, com referência ao commit da correção
+  - [x] Comentário da DAG (`dags/etl_pipeline.py:125-130`) corrigido: as views somem por causa do `DROP ... CASCADE`, não do container efêmero
 
 ---
 
