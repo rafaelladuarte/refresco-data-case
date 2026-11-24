@@ -232,5 +232,12 @@ Limitações assumidas conscientemente, com o card correspondente no [BACKLOG](B
 
 ## 🗺️ Roadmap
 
-- **Sprint 1 (concluída em 24/11/2026):** qualidade de dados, regras de negócio, reprodutibilidade e documentação. Plano e resultados em [docs/backlog/SPRINT-01.md](docs/backlog/SPRINT-01.md).
-- **Próximas sprints:** testes unitários e CI, ingestão idempotente por `logical_date`, escrita atômica, incremental com merge e auditoria de qualidade. Detalhes no [BACKLOG.md](BACKLOG.md).
+| Sprint | Foco | Status |
+|---|---|---|
+| **1** | Qualidade de dados, regras de negócio, reprodutibilidade e documentação | ✅ Concluída em 24/11/2026 ([plano e resultados](docs/backlog/SPRINT-01.md)) |
+| **2** | Fundação de engenharia: módulo comum, testes unitários, CI de ponta a ponta, contratos dbt | 🟡 Plano aguardando aprovação ([plano](docs/backlog/SPRINT-02.md)) |
+| **3** | Pipeline robusto: idempotência por `logical_date`, escrita atômica, carga tipada, incremental com merge, auditoria | Backlog |
+| **4** | Modelagem e observabilidade: fato financeira, SCD2, representantes, alertas, freshness | Backlog |
+| Opcionais | Cosmos, API FastAPI, Delta Lake, clima por região | Conforme o foco do portfólio |
+
+Cards e critérios de aceite: [BACKLOG.md](BACKLOG.md).

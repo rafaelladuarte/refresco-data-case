@@ -1,0 +1,202 @@
+# Sprint 2: Fundação de engenharia
+
+> **Status:** 🟡 Aguardando aprovação
+> **Escopo:** os 6 cards da coluna "A Fazer — Sprint 2" do [`BACKLOG.md`](../../BACKLOG.md): ENG-01, ENG-02, ENG-03, MOD-02, DQ-09 e INF-04
+> **Objetivo:** criar a rede de segurança (módulo comum, testes unitários, CI de ponta a ponta e contratos dbt mais rígidos) antes das mudanças estruturais da Sprint 3, e fechar os achados da validação da Sprint 1.
+
+**Por que esta sprint vem antes da Sprint 3.** A validação da Sprint 1 só pegou a corrupção por execuções simultâneas e a quebra da Q4 porque a aplicação foi rodada inteira. A Sprint 3 vai mexer em escrita, carga e incremental. Sem testes automatizados e sem CI, cada mudança dependeria de outra validação manual.
+
+---
+
+## 1. Antes de aprovar: decisões pendentes
+
+### D1 · Produtos com custo zero (DQ-09)
+
+`P012` (Del Valle Pêssego) e `P019` (Burn Energy) chegam com `custo_unitario = 0.00` e aparecem na Q4 com margem de 100%.
+
+| Opção | Comportamento | Prós e contras |
+|---|---|---|
+| **A (recomendada)** | Produto mantido. Custo `<= 0` vira `NULL` na Silver e ganha a flag `custo_disponivel = false`, registrada no log. A fato fica com `custo_total`/`margem_bruta` nulos para esses produtos, e a Q4 os mostra como "custo indisponível", fora do ranking de margem. | As vendas continuam contando em receita e volume. A margem deixa de ser inflada, e o problema fica visível em vez de escondido. |
+| B | Produto vai para a quarentena | Simples, mas as vendas desses SKUs viram órfãs e saem de toda a Gold: receita e volume reais deixariam de aparecer. |
+
+### D2 · Clima no job e2e da CI (ENG-03)
+
+A ingestão de clima chama a API Open-Meteo.
+
+| Opção | Comportamento | Prós e contras |
+|---|---|---|
+| **A (recomendada)** | Fixture gravada: respostas reais da API para 2020–2025 versionadas em `tests/fixtures/open_meteo/`. A nova variável `CLIMA_FIXTURE_DIR` faz o `ingest_clima` ler os arquivos em vez de chamar a rede (≈10 linhas). | CI determinística e independente de serviço de terceiros. O caminho HTTP continua coberto por teste unitário com resposta simulada. |
+| B | A CI chama a API real | Valida a integração de verdade, mas a CI pode falhar por rede ou limite de requisições, sem relação com o código. |
+
+### D3 · Meta de cobertura (ENG-02)
+
+- **A (recomendada):** relatório de cobertura sempre e **gate de 80%** apenas em `pipeline/common/` e nas funções de regra (`validate_vendas`, `deduplicate_clientes`, `parse_mixed_dates`, `normalize_ativo`, mapeamentos do financeiro). As funções `main()`, que fazem só entrada e saída, ficam cobertas pelo job e2e.
+- B: gate global, que forçaria testes artificiais de I/O com mocks de S3.
+
+### D4 · Estratégia de Git
+
+- **Recomendado:** primeiro abrir e fazer o merge do PR `feat/sprint-1` → `main`. Depois, criar `feat/sprint-2` a partir da `main` atualizada. Mantém **um commit por card** (você commita) e um PR no final, que já vai rodar a CI nova.
+
+### D5 · Python local
+
+A imagem usa Python 3.12 e as versões fixadas (ex.: `pandas==2.1.4`) não têm wheels para o Python 3.13 instalado na sua máquina.
+- **Recomendado:** adicionar `.python-version` com `3.12` (o `pyenv` já está instalado) e documentar `pip install -r requirements-dev.txt` num virtualenv. A CI usa 3.12.
+
+---
+
+## 2. Ordem de execução e dependências
+
+```
+Fase 1 – Infra        INF-04 (dbt sem root)
+                         │
+Fase 2 – Refatoração  ENG-01 (pipeline/common) ──► validação pelo e2e da Sprint 1 (sem mudança de comportamento)
+                         │
+Fase 3 – Testes       ENG-02 (pytest + cobertura) ──► DQ-09 (com testes desde o início)
+                         │
+Fase 4 – dbt          MOD-02 (testes mais rígidos + reconciliação)
+                         │
+Fase 5 – CI           ENG-03 (lint + unit + e2e com MinIO/Postgres + badge)
+                         │
+Fase 6 – Validação    PR com a CI verde + execução da DAG no ambiente real
+```
+
+- **INF-04 primeiro:** é pequeno e libera rodar o dbt fora do Docker durante o resto da sprint.
+- **ENG-01 antes dos testes:** os testes passam a mirar os módulos finais, sem retrabalho.
+- **ENG-03 por último:** a CI junta tudo e é validada pelo próprio PR da sprint.
+
+---
+
+## 3. Plano por card
+
+### Fase 1: Infraestrutura
+
+#### INF-04 · dbt sem root
+- **`.env` / `.env.example`:** novas variáveis `HOST_UID`/`HOST_GID` (`id -u` / `id -g`).
+- **`dags/etl_pipeline.py`:** `_dbt_common` com `user=f"{HOST_UID}:{HOST_GID}"` e `HOME=/tmp` no ambiente do container. O `dbt deps` precisa de um HOME gravável.
+- **Limpeza única** das pastas que já pertencem ao root, documentada no README: `docker run --rm -v "$PWD/dbt:/w" alpine chown -R "$(id -u):$(id -g)" /w/logs /w/target /w/dbt_packages`.
+- **Validação:** depois de uma execução da DAG, `find dbt -user root` não retorna nada, e um `dbt` local consegue escrever em `dbt/target`.
+
+### Fase 2: Refatoração
+
+#### ENG-01 · `pipeline/common/`
+Estrutura proposta, **sem mudar comportamento**:
+
+```
+pipeline/common/
+├── config.py      # absorve settings.py: require_env, s3_storage_options, postgres_url, ClimaConfig
+├── storage.py     # s3 client, ensure_bucket, read_bronze(table) (glob + concat), write_silver(df, path, partition_cols),
+│                  # write_quarantine(df, entity) — inclui a limpeza da execução anterior
+├── validators.py  # PATTERN_ID_*, normalize_id, clean_text (absorve silver/text.py)
+└── logging.py     # get_logger(name) com formato único (substitui 8 logging.basicConfig)
+```
+
+- As regras de negócio continuam em cada `clean_*.py` (`validate_vendas`, `deduplicate_clientes` etc.). O `common` só fica com o que é repetido.
+- Remover `pipeline/settings.py`, `pipeline/silver/text.py` e o pacote vazio `pipeline/gold/`. Atualizar os imports da DAG.
+- **Validação:** rodar o e2e da Sprint 1 (MinIO e Postgres isolados) e comparar com a referência: 3.482 vendas na fato, 18 na quarentena de vendas, 5 na de clientes e 65 testes dbt PASS. **Os números precisam ser idênticos.**
+
+### Fase 3: Testes e qualidade
+
+#### ENG-02 · Testes unitários
+- **Estrutura:** `tests/unit/` (funções puras) e `tests/integration/` (integridade da DAG), mais o `pyproject.toml` com a configuração de `pytest` e `coverage`.
+- **Casos cobertos (mínimo):**
+
+| Função | Casos |
+|---|---|
+| `parse_mixed_dates` | 4 formatos aceitos; data inexistente (`31/02/2024`), texto e nulo viram NaT; formatos não se confundem |
+| `validate_vendas` | cada regra isolada; venda que viola várias regras (motivo combinado); entrada vazia; IDs minúsculos e com espaços |
+| `deduplicate_clientes` | dedup por id mais recente; CNPJ duplicado mantém o menor id; resultado determinístico em ordens embaralhadas; id inválido, CNPJ e nome vazios |
+| `repair_double_encoding` | corrige mojibake real; não altera texto legítimo com acento; conversão inválida devolve o original |
+| `normalize_ativo`, mapas do financeiro | variações (`S`, `Sim`, `1`, `devolução`, `BONIF.` …) e valor desconhecido |
+| `clean_text` / `normalize_id` | nulo continua nulo (nunca `"nan"`); vazio vira nulo; maiúsculas |
+| `ClimaConfig` | coordenadas padrão; período invertido gera erro |
+| `ingest_clima.fetch_weather_data_by_year` | resposta HTTP simulada (`unittest.mock`): sucesso, 404 e corpo sem `daily` |
+
+- **Integridade da DAG** (`tests/integration/test_dag.py`, marcado como `airflow`): a DAG carrega sem erros de importação, tem 14 tasks, `max_active_runs == 1` e as dependências esperadas. Roda no job e2e, dentro da imagem do Airflow. No job unitário é pulado, porque o Airflow não é instalado lá.
+- **Validação:** `pytest` verde localmente (Python 3.12) e cobertura ≥ 80% nos módulos do gate (D3).
+
+#### DQ-09 · Custo unitário *(depende da D1)*
+- **`clean_produtos.py`:** `custo_unitario <= 0` ou nulo vira `NULL` com `custo_disponivel = false`, e o log lista os produtos. `preco_tabela <= 0` segue a mesma regra, com a flag `preco_disponivel`. Testes unitários escritos junto.
+- **dbt:**
+  - `stg_produtos`/`dim_produto` expõem `custo_disponivel`. A fato fica com `custo_total` e `margem_bruta` nulos quando não há custo.
+  - Teste em `dim_produto`: `custo_unitario > 0` quando `custo_disponivel`.
+- **`vw_q4`:** margem calculada só para produtos com custo, e os demais aparecem com margem nula. O Streamlit mostra "custo indisponível" na tabela e tira esses produtos do gráfico de margem.
+- **Validação:** P012 e P019 sem margem de 100% na Q4; receita e volume desses SKUs mantidos nas Q1–Q3.
+
+### Fase 4: dbt
+
+#### MOD-02 · Testes dbt mais rígidos
+- `relationships` de `sk_cliente`/`sk_produto` na fato passam de `warn` para `error`. Os `not_null` dessas chaves também.
+- `unique` em `stg_financeiro.id_venda` (hoje há no máximo 1 lançamento por venda; o teste protege a fato de duplicar linhas).
+- Teste singular `assert_fato_reconcilia_com_staging.sql`: contagem e soma de `receita_liquida` na fato iguais às de `stg_vendas`. Ele teria pegado, na hora, a duplicação da Sprint 1.
+- `accepted_values` com os domínios atuais: `dim_cliente.canal` (5 canais + `Não informado`), `dim_cliente.uf`, `dim_cliente.regiao` e `dim_produto.familia`. A lista exata sai dos dados na implementação.
+- **Validação:** `dbt build` verde. Um teste negativo, introduzindo de propósito uma duplicata numa base de teste, precisa fazer o teste de reconciliação falhar.
+
+### Fase 5: CI
+
+#### ENG-03 · GitHub Actions *(depende da D2)*
+`.github/workflows/ci.yml`, disparado em `push` e `pull_request`, com dois jobs:
+
+| Job | O que faz | Tempo estimado |
+|---|---|---|
+| `lint-unit` | Python 3.12 · `ruff check` + `ruff format --check` · `pytest tests/unit` com cobertura e gate (D3) | ~1–2 min |
+| `e2e` | build da imagem do Airflow · services `bitnamilegacy/minio` e `postgres:15` · pipeline Python sobre `data/raw` (clima via fixture, D2) · `dbt deps/seed/build` com a imagem fixada · teste de integridade da DAG · consultas de verificação (fato = 3.482, quarentenas 18/5) | ~5–8 min |
+
+- **Ruff:** configuração no `pyproject.toml`, com regras `E`, `F`, `I`, `B`, `UP` e `SIM` e `line-length = 110`. Hoje são 56 apontamentos com a configuração global da máquina; com a do projeto, eles serão corrigidos ou justificados no mesmo card.
+- O **script e2e** da Sprint 1, que hoje está fora do repositório, vira `scripts/e2e.sh`. Ele é usado pela CI e pode ser rodado localmente.
+- **Badge** de status da CI no topo do README.
+- **Validação:** o PR da Sprint 2 abre com os dois jobs verdes. Um commit de teste com erro proposital de lint e um teste quebrado tem que deixar a CI vermelha.
+
+---
+
+## 4. Variáveis novas no `.env`
+
+```dotenv
+# UID/GID do host para o container dbt (INF-04)
+HOST_UID=1000        # id -u
+HOST_GID=1000        # id -g
+
+# Somente CI/testes: lê respostas gravadas da Open-Meteo em vez de chamar a API (D2)
+# CLIMA_FIXTURE_DIR=tests/fixtures/open_meteo
+```
+
+---
+
+## 5. Validação final da sprint
+
+1. CI verde no PR (`lint-unit` + `e2e`).
+2. Ambiente real recriado: DAG com 14/14 tasks verdes, `dbt test` 100% PASS (com os novos testes), sem arquivos de root em `dbt/`.
+3. Q4 sem margem de 100% para P012/P019 e números da Q1–Q3 inalterados em relação à Sprint 1.
+4. README com o badge, a seção "Como rodar os testes" e as capturas atualizadas, se a Q4 mudar.
+
+**Definição de pronto de cada card:** critérios do `BACKLOG.md` marcados, testes cobrindo a mudança, e2e com os números de referência, commit próprio com o ID do card.
+
+---
+
+## 6. Riscos e mitigação
+
+| Risco | Mitigação |
+|---|---|
+| A refatoração do ENG-01 muda comportamento sem querer | Comparação obrigatória com os números de referência da Sprint 1, pelo e2e, antes do commit |
+| Imagem `bitnamilegacy/minio` indisponível no runner da CI | Ela é pública no Docker Hub; se falhar, cache da imagem ou alternativa S3-compatível só na CI |
+| Job e2e lento ou instável | Fixture de clima (D2), imagens com tags fixas, `timeout-minutes` no job |
+| Ruff apontar muitos ajustes de estilo | Correções automáticas (`--fix`) num commit separado dentro do ENG-03, para não poluir os diffs de regra |
+| `user=` no DockerOperator quebrar o `dbt deps` (HOME não gravável) | `HOME=/tmp` no ambiente do container, validado no ambiente real |
+
+---
+
+## 7. Fora do escopo desta sprint
+
+- Idempotência por `logical_date`, escrita atômica, `COPY` e incremental com merge (Sprint 3). Os testes desta sprint são a base para fazê-los com segurança.
+- Quarentena genérica e tabela de auditoria (ARQ-05, Sprint 3).
+- Observabilidade e novos modelos (Sprint 4).
+
+---
+
+## Aprovação
+
+- [ ] D1: produtos com custo zero (opção: ___)
+- [ ] D2: clima no job e2e (opção: ___)
+- [ ] D3: meta de cobertura (opção: ___)
+- [ ] D4: estratégia de Git
+- [ ] D5: Python local 3.12
+- [ ] Plano aprovado
