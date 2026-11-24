@@ -1,0 +1,6 @@
+tipo_lancamento,entra_receita,entra_volume,descricao
+VENDA,true,true,Venda faturada
+BONIFICACAO,false,true,Produto entregue sem cobrança: conta em volume e custo mas não em receita
+DEVOLUCAO,false,false,Venda desfeita pelo cliente
+AJUSTE,false,false,Lançamento contábil sem operação comercial
+OUTRO,false,false,Sem semântica de negócio definida

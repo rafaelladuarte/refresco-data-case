@@ -214,6 +214,11 @@ Fase 6 – Validação    execução ponta a ponta + checklist da seção 5
 - **DAG:** incluir `dbt seed` (nova task `dbt_seed`, entre `dbt_deps` e `dbt_run_staging`).
 - **Atenção:** a `fato_vendas` é incremental. A mudança de colunas exige `dbt run --full-refresh -s fato_vendas` uma vez. Vou documentar isso no README.
 - **Validação:** `select tipo_lancamento, count(*) from gold.fato_vendas where status_financeiro='PAGO' and entra_receita group by 1` deve retornar só `VENDA`.
+- **Resultado da execução:**
+  - Seed `regra_tipo_lancamento` com schema YAML próprio (tipos de coluna e testes). Na `fato_vendas`, o teste `accepted_values` com lista fixa foi trocado por `relationships` com o seed, que vira a fonte única dos tipos válidos.
+  - `vw_q4` segue a D2 por completo: receita só de `VENDA`, custo de `VENDA` + `BONIFICACAO` (bonificação reduz a margem).
+  - Vendas `PAGO` consideradas: antes 849; agora 223 em receita e 436 em volume. Receita total na Q4: R$ 39.431,22; custo: R$ 30.764,25; margem: R$ 8.666,97.
+  - DAG: task `dbt_seed` entre `dbt_deps` e `dbt_run_staging` (14 tasks). dbt: 57 testes PASS.
 
 #### DQ-05 · Metas via seed *(depende da D3)*
 - Criar `dbt/seeds/metas_canal_mes.csv` (`canal, ano, mes, meta_volume_caixas`), com um comentário no `schema.yml` indicando que os valores são fictícios.

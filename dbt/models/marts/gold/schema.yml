@@ -137,13 +137,22 @@ models:
       - name: tipo_lancamento
         description: "Tipo do lançamento financeiro. NULL quando a venda ainda não possui registro em stg_financeiro (comportamento esperado — venda pendente)."
         data_tests:
-          - accepted_values:
-              values: ['VENDA', 'BONIFICACAO', 'DEVOLUCAO', 'AJUSTE', 'OUTRO']
-              # accepted_values ignora NULL por padrão no dbt — NULLs não são testados aqui.
-              # Se um novo tipo aparecer na ingestão sem estar nessa lista, o teste falha.
+          # Fonte única dos tipos válidos: seed regra_tipo_lancamento. Um tipo novo sem
+          # regra definida falha aqui (NULL é ignorado — venda sem lançamento).
+          - relationships:
+              to: ref('regra_tipo_lancamento')
+              field: tipo_lancamento
       - name: status_financeiro
         description: "Status do lançamento financeiro. NULL quando a venda ainda não possui registro em stg_financeiro (comportamento esperado — venda pendente)."
         data_tests:
           - accepted_values:
               values: ['PAGO', 'PENDENTE', 'CANCELADO']
               # accepted_values ignora NULL por padrão no dbt.
+      - name: entra_receita
+        description: "Flag do seed regra_tipo_lancamento: a venda compõe receita. False quando não há lançamento."
+        data_tests:
+          - not_null
+      - name: entra_volume
+        description: "Flag do seed regra_tipo_lancamento: a venda compõe volume e custo. False quando não há lançamento."
+        data_tests:
+          - not_null

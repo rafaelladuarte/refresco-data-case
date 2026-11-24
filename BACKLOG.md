@@ -94,8 +94,8 @@ As views filtram só por `status = 'PAGO'`, então devoluções e bonificações
 
 - **Arquivos:** `vw_q1_ranking_vendas.sql`, `vw_q3_tendencia_volume.sql`, `vw_q4_margem_bruta.sql`
 - **Critérios de aceite:**
-  - [ ] Regra de negócio definida e documentada (ex.: só `VENDA` entra em receita; `DEVOLUCAO` é subtraída)
-  - [ ] Regra aplicada de forma consistente nas 4 views
+  - [x] Regra de negócio definida e documentada (ex.: só `VENDA` entra em receita; `DEVOLUCAO` é subtraída)
+  - [x] Regra aplicada de forma consistente nas 4 views
 
 ### DQ-07 · Clima no grão diário na `dim_tempo`
 `modelagem` · 🟠 Média · `P`

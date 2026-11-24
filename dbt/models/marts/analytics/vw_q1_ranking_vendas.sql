@@ -13,6 +13,7 @@ WITH vendas_regiao_produto AS (
     JOIN {{ ref('dim_produto') }} p ON f.sk_produto = p.sk_produto
     JOIN {{ ref('dim_cliente') }} c ON f.sk_cliente = c.sk_cliente
     WHERE f.status_financeiro = 'PAGO'
+      AND f.entra_receita          -- regra: seed regra_tipo_lancamento
       AND c.ativo = true
     GROUP BY p.sk_produto, p.nome_produto, p.familia, c.regiao
 ),

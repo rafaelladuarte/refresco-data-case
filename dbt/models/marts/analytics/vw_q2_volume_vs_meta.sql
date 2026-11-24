@@ -5,10 +5,12 @@ WITH volume_realizado AS (
         c.canal,
         SUM(f.qtd_caixas) AS volume_realizado_caixas,
         COUNT(DISTINCT f.sk_venda) AS total_vendas_realizadas,
-        SUM(f.receita_liquida) AS receita_realizada
+        -- bonificações entram no volume, mas não na receita
+        SUM(CASE WHEN f.entra_receita THEN f.receita_liquida ELSE 0 END) AS receita_realizada
     FROM {{ ref('fato_vendas') }} f
     JOIN {{ ref('dim_cliente') }} c ON f.sk_cliente = c.sk_cliente
     WHERE f.status_financeiro = 'PAGO'
+      AND f.entra_volume           -- regra: seed regra_tipo_lancamento
       AND c.ativo = true
     GROUP BY 1
 ),

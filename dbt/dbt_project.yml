@@ -24,3 +24,7 @@ models:
     marts:
       +materialized: table
       +schema: gold
+
+seeds:
+  refresco_dbt:
+    +schema: gold

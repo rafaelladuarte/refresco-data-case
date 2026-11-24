@@ -1,0 +1,28 @@
+version: 2
+
+seeds:
+  - name: regra_tipo_lancamento
+    description: >
+      Regra de negócio por tipo de lançamento financeiro. Cada venda tem no máximo um
+      lançamento, então o tipo classifica a própria venda (ex.: DEVOLUCAO = venda desfeita).
+      As views analíticas usam estas flags em vez de listar tipos no SQL.
+    config:
+      column_types:
+        tipo_lancamento: text
+        entra_receita: boolean
+        entra_volume: boolean
+        descricao: text
+    columns:
+      - name: tipo_lancamento
+        description: "Tipo padronizado na Silver (clean_financeiro.py)."
+        data_tests:
+          - unique
+          - not_null
+      - name: entra_receita
+        description: "A venda compõe receita (ranking, margem, receita realizada)."
+        data_tests:
+          - not_null
+      - name: entra_volume
+        description: "A venda compõe volume físico e custo (tendência, volume vs meta, custo da margem)."
+        data_tests:
+          - not_null

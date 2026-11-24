@@ -165,6 +165,14 @@ with DAG(
         **_dbt_common,
     )
 
+    # Passo 0.5 — carrega os seeds (regras de negócio e metas) no schema gold
+    dbt_seed = DockerOperator(
+        task_id='dbt_seed',
+        command='seed --profiles-dir /usr/app/dbt',
+        execution_timeout=timedelta(minutes=10),
+        **_dbt_common,
+    )
+
     # Passo 1 — recria as views stg_* no schema load_stage
     dbt_run_staging = DockerOperator(
         task_id='dbt_run_staging',
@@ -228,4 +236,4 @@ with DAG(
     ] >> task_load_to_staging
 
     # dbt: staging → gold → test (cada etapa só roda se a anterior tiver sucesso)
-    task_load_to_staging >> dbt_deps >> dbt_run_staging >> dbt_run_gold >> dbt_test_gold >> dbt_run_analytics
+    task_load_to_staging >> dbt_deps >> dbt_seed >> dbt_run_staging >> dbt_run_gold >> dbt_test_gold >> dbt_run_analytics
