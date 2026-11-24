@@ -1,5 +1,21 @@
 # Diagnóstico: Registros Órfãos na Camada Silver
 
+> ✅ **Status: RESOLVIDO na Sprint 1.** Este documento é mantido como registro histórico do diagnóstico.
+> Os trechos de código e comandos abaixo refletem o estado **anterior** às correções. O serviço `dbt-core`, por exemplo, não existe mais: o dbt roda via DockerOperator.
+>
+> **Correção do diagnóstico.** Parte dos "órfãos" listados não vinha da origem:
+> - **C0004 e C0005 existem em `clientes.csv`.** Eram descartados pelo próprio pipeline: o dedup por CNPJ mantinha os recadastros C0203/C0204 (sem vendas) e descartava os originais. Resolvido em `04d307f` ([DQ-08], ver [ADR-004](decisoes_tratamento.md#adr-004--clientes-com-cnpj-duplicado-d1)).
+> - Os **órfãos reais da origem** são os produtos `P-01`, `PXXX`, `P000`, `P099` e 5 vendas sem `id_cliente`. Eles vão para `silver/_quarentena/vendas/` com motivo.
+>
+> **Commits relacionados:**
+> - `4d3605a` [DQ-03]: a string `"nan"` não é mais gerada (`clean_text`).
+> - `04d307f` [DQ-08]: dedup de clientes por `id_cliente` e quarentena de CNPJ duplicado.
+> - `bed0775` [DQ-04]: `validate_referential_integrity` virou `validate_vendas` (medidas, datas e integridade), sem descarte silencioso.
+>
+> **Testes.** Os testes `relationships` de `sk_cliente`/`sk_produto` na Gold continuam com `severity: warn`. O endurecimento para `error` está planejado no card MOD-02 do [`BACKLOG.md`](../BACKLOG.md).
+
+---
+
 ## Resumo Executivo
 
 Os registros órfãos (`C0004`, `C0005`, linha em branco, `P099`, `PXXX`, `P000`, `P-01`) chegam à tabela fato porque os scripts Silver **não validam integridade referencial nem formato de IDs** antes de salvar no S3. Cada script opera em sua própria tabela de forma isolada — nenhum deles verifica se os IDs de `vendas` existem nos cadastros de `clientes` e `produtos`.

@@ -122,17 +122,22 @@ with DAG(
     # -------------------------------------------------------------------------
     # GOLD — Transformações dimensionais via dbt (DockerOperator)
     #
-    # ATENÇÃO — ordem obrigatória de execução dbt:
+    # Ordem de execução dbt (cada etapa só roda se a anterior tiver sucesso):
     #
-    #   1. dbt_run_staging: cria (ou recria) as views stg_* no schema load_stage.
-    #      Cada DockerOperator cria um container efêmero sem estado. As views de
-    #      staging não persistem entre execuções de DAG — precisam ser recriadas
-    #      antes que os modelos gold possam referenciá-las via ref().
+    #   0. dbt_deps / dbt_seed: instala pacotes e carrega os seeds de regras de
+    #      negócio (regra_tipo_lancamento) e metas (metas_canal_mes) no schema gold.
+    #
+    #   1. dbt_run_staging: recria as views stg_* no schema load_stage.
+    #      Necessário a cada execução porque load_to_staging faz
+    #      DROP TABLE ... CASCADE nas tabelas de load_stage, o que remove as views
+    #      dependentes. (Não tem relação com o container dbt ser efêmero: as views
+    #      ficam no PostgreSQL.) Trocar por TRUNCATE + COPY está no card ARQ-03.
     #
     #   2. dbt_run_gold: materializa dim_* e fato_vendas no schema gold.
-    #      Referencia as views de staging via ref('stg_xxx'), que agora existem.
     #
-    #   3. dbt_test_gold: valida integridade referencial e accepted_values.
+    #   3. dbt_test_gold: testes da Gold (integridade, regras, cobertura de clima).
+    #
+    #   4. dbt_run_analytics: views analíticas vw_q1..vw_q4 consumidas pelo Streamlit.
     #
     # network_mode conecta o container à uberlandia-net para resolução DNS
     # de 'postgres-gold' conforme configurado no profiles.yml.
@@ -208,15 +213,14 @@ with DAG(
     # =========================================================================
     # GRAFO DE DEPENDÊNCIAS
     #
-    #  ingest_csv_task ──► clean_clientes_task ──┐
-    #                  ──► clean_produtos_task  ──┼──► clean_vendas_task ──┐
-    #                  ──► clean_financeiro_task──┘                        │
-    #                                                                       ▼
-    #  ingest_clima_task ──► clean_clima_task ──────────────────► task_load_to_staging
-    #                                                                       │
-    #                                                              dbt_run_gold
-    #                                                                       │
-    #                                                             dbt_test_gold
+    #  ingest_csv ──► clean_clientes ───┐
+    #             ──► clean_produtos ───┴──► clean_vendas ──┐
+    #             ──► clean_financeiro ─────────────────────┤
+    #  ingest_clima ──► clean_clima ────────────────────────┤
+    #                                                       ▼
+    #                                              load_to_staging
+    #                                                       │
+    #   dbt_deps ► dbt_seed ► dbt_run_staging ► dbt_run_gold ► dbt_test_gold ► dbt_run_analytics
     # =========================================================================
 
     # Cadastros independentes disparam em paralelo após CSV Bronze
@@ -235,5 +239,5 @@ with DAG(
         clean_clima_task,
     ] >> task_load_to_staging
 
-    # dbt: staging → gold → test (cada etapa só roda se a anterior tiver sucesso)
+    # dbt: deps → seed → staging → gold → test → analytics
     task_load_to_staging >> dbt_deps >> dbt_seed >> dbt_run_staging >> dbt_run_gold >> dbt_test_gold >> dbt_run_analytics
