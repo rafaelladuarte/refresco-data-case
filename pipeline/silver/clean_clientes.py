@@ -11,6 +11,26 @@ logger = logging.getLogger(__name__)
 # Formato válido de id_cliente: C seguido de 4 dígitos (ex: C0001)
 PATTERN_ID_CLIENTE = re.compile(r'^C\d{4}$', re.IGNORECASE)
 
+# Sequências típicas de texto UTF-8 decodificado como Latin-1 (ex.: "Ã©" no lugar de "é")
+MOJIBAKE_MARKERS = ("Ã", "Â")
+
+
+def repair_double_encoding(value):
+    """Corrige texto com dupla codificação presente na própria origem.
+
+    Alguns nomes em clientes.csv (arquivo Latin-1) foram gravados com bytes UTF-8,
+    ex.: "Mercado do ZÃ©". Só tenta o reparo quando há marcadores de mojibake e
+    mantém o valor original se a conversão não for válida, para não corromper
+    textos legítimos.
+    """
+    if not isinstance(value, str) or not any(m in value for m in MOJIBAKE_MARKERS):
+        return value
+    try:
+        return value.encode("latin1").decode("utf-8")
+    except UnicodeError:
+        return value
+
+
 def normalize_ativo(value):
     """Normaliza valores booleanos da coluna 'ativo'."""
     if pd.isna(value):
@@ -49,6 +69,14 @@ def main():
         cols_str = ["nome_cliente", "canal", "regiao", "cidade", "uf", "representante"]
         for col in cols_str:
             df[col] = df[col].astype(str).str.strip()
+
+        reparados = 0
+        for col in cols_str:
+            corrigido = df[col].apply(repair_double_encoding)
+            reparados += int((corrigido != df[col]).sum())
+            df[col] = corrigido
+        if reparados:
+            logger.warning(f"{reparados} valores com dupla codificação (mojibake) corrigidos na origem de clientes")
             
         df["_ingested_at"] = pd.to_datetime(df["_ingested_at"], errors="coerce")
         df["uf"] = df["uf"].str.upper()

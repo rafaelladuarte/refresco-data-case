@@ -11,13 +11,6 @@ logger = logging.getLogger(__name__)
 # Formato válido de id_produto: P seguido de 3 dígitos (ex: P001)
 PATTERN_ID_PRODUTO = re.compile(r'^P\d{3}$', re.IGNORECASE)
 
-def fix_encoding(text):
-    """Corrige problemas de encoding (Latin1 para UTF-8)."""
-    try:
-        return text.encode("latin1").decode("utf-8")
-    except:
-        return text
-
 def main():
     logger.info("Iniciando processamento Silver para Produtos")
     
@@ -36,7 +29,7 @@ def main():
         logger.info(f"Linhas lidas da Bronze: {len(df)}")
         
         for col in ["nome_produto", "familia", "marca", "embalagem"]:
-            df[col] = df[col].astype(str).apply(fix_encoding).str.strip()
+            df[col] = df[col].astype(str).str.strip()
         
         df["familia"] = df["familia"].str.upper().replace({
             "REFRIGERANTES": "REFRIGERANTE", 

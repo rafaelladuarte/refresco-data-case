@@ -133,6 +133,8 @@ Fase 6 – Validação    execução ponta a ponta + checklist da seção 5
 #### DQ-01 · Encoding na ingestão
 - **`pipeline/bronze/ingest_csv.py`:** mapa explícito `SOURCE_ENCODINGS = {"clientes": "latin1", "vendas": "utf-8", "produtos": "utf-8", "financeiro": "utf-8"}`, no lugar do `latin1` fixo. A Bronze é sempre gravada em UTF-8 (`encoding="utf-8"` explícito). Usar o mapa explícito em vez de detecção automática deixa o comportamento previsível e o contrato da fonte documentado.
 - **`clean_produtos.py` / `clean_financeiro.py`:** remover `fix_encoding`, que vira desnecessária. Manter o `strip`/`upper`.
+  - ⚠️ **Desvio na execução:** ao ler cada arquivo com o encoding correto, `clientes.csv` ainda tinha **4 nomes com dupla codificação na própria origem** (ex.: `Mercado do ZÃ©`, `Padaria da Maria CÃ£o`, C0201). Para esses foi criada `repair_double_encoding` em `clean_clientes.py`. Ela só atua quando encontra marcadores de mojibake (`Ã`, `Â`), mantém o valor original se a conversão falhar e registra no log a quantidade corrigida. A Bronze continua fiel à origem.
+  - Corrigido também o `KeyError: 'mtime'` na listagem de arquivos da Bronze (objetos S3 expõem `LastModified`). Era uma falha antiga, só de log.
 - **Validação:**
   - `select distinct canal_venda from gold.dim_representante` deve retornar `Conveniência`.
   - `select distinct familia from gold.dim_produto` e `select distinct tipo_lancamento from gold.fato_vendas` não devem ter `Ã`.

@@ -9,13 +9,6 @@ from pipeline.settings import s3_storage_options
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-def fix_encoding(text):
-    """Corrige problemas de encoding comuns em arquivos CSV."""
-    try:
-        return text.encode("latin1").decode("utf-8")
-    except:
-        return text
-
 def main():
     logger.info("Iniciando processamento Silver para Financeiro")
     
@@ -39,7 +32,6 @@ def main():
             df[col] = df[col].astype(str).str.strip().str.upper()
             
         df["competencia"] = df["competencia"].astype(str).str.replace("/", "", regex=False).str.strip()
-        df["tipo_lancamento"] = df["tipo_lancamento"].apply(fix_encoding)
         
         df["tipo_lancamento_norm"] = df["tipo_lancamento"].str.strip().str.upper().str.replace(".", "", regex=False)
         map_tipo = {

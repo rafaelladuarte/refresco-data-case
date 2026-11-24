@@ -36,10 +36,10 @@ Todos os CSVs são lidos como `latin1`, mas só `clientes.csv` é ISO-8859; `ven
 
 - **Arquivos:** `pipeline/bronze/ingest_csv.py:62`, `pipeline/silver/clean_produtos.py:13`, `pipeline/silver/clean_financeiro.py:10`
 - **Critérios de aceite:**
-  - [ ] Encoding definido por arquivo (mapa de configuração) ou detectado automaticamente
-  - [ ] Bronze gravada sempre em UTF-8
-  - [ ] Funções `fix_encoding` removidas da Silver
-  - [ ] `select distinct canal_venda from gold.dim_representante` sem caracteres corrompidos
+  - [x] Encoding definido por arquivo (mapa de configuração) ou detectado automaticamente
+  - [x] Bronze gravada sempre em UTF-8
+  - [x] Funções `fix_encoding` removidas da Silver
+  - [ ] `select distinct canal_venda from gold.dim_representante` sem caracteres corrompidos — _validado na Silver (`canal_venda` = `Conveniência`); conferência na Gold na validação final da sprint_
 
 ### DQ-02 · Corrigir coordenadas da API de clima
 `bug` · 🔴 Alta · `P`
