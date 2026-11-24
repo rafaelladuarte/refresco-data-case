@@ -34,8 +34,8 @@ def _require_env(name):
 
 DBT_PROJECT_HOST_PATH = _require_env('DBT_PROJECT_HOST_PATH')
 
-# Nome da rede Docker Compose (prefixo do projeto + nome no YAML)
-DOCKER_NETWORK = os.getenv('DOCKER_NETWORK', 'refresco-data-case_uberlandia-net')
+# Rede Docker com nome fixo (networks.uberlandia-net.name no docker-compose.yml)
+DOCKER_NETWORK = os.getenv('DOCKER_NETWORK', 'uberlandia-net')
 
 # Imagem dbt com tag fixa. Fonte única: variável DBT_IMAGE no .env.
 DBT_IMAGE = os.getenv('DBT_IMAGE', 'ghcr.io/dbt-labs/dbt-postgres:1.8.2')

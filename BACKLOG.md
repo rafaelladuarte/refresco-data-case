@@ -143,10 +143,10 @@ O join é por `(ano, mes)`, então cada dia carrega a média e a soma de precipi
 `infra` · 🟢 Baixa · `P`
 
 - **Itens:**
-  - [ ] Remover o serviço `dbt-core` (`tail -f /dev/null`), já que o dbt roda via DockerOperator
-  - [ ] Remover `init/01_schema.sql` (tabela `gold_vendas` não utilizada)
-  - [ ] Montar `docker.sock` como read-only ou ajustar o README
-  - [ ] Parametrizar o GID `984` (`DOCKER_GID` no `.env`)
+  - [x] Remover o serviço `dbt-core` (`tail -f /dev/null`), já que o dbt roda via DockerOperator
+  - [x] Remover `init/01_schema.sql` (tabela `gold_vendas` não utilizada)
+  - [ ] Montar `docker.sock` como read-only ou ajustar o README — _decidido manter leitura/escrita (`:ro` não restringe a API); risco documentado no compose, README atualizado no DOC-01_
+  - [x] Parametrizar o GID `984` (`DOCKER_GID` no `.env`)
 
 ### DOC-01 · Alinhar README com o código
 `docs` · 🔴 Alta · `M`

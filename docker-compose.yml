@@ -1,12 +1,12 @@
 x-airflow-common: &airflow-common
   build: .
   user: "50000:50000"
-  # group_add injeta o GID do grupo 'docker' do host como grupo suplementar.
-  # Verificado em: stat -c '%g' /var/run/docker.sock → 984
-  # Isso permite que o processo airflow (uid 50000) leia/escreva no socket
-  # sem precisar rodar como root ou alterar permissões do socket.
+  # group_add injeta o GID do grupo dono do docker.sock no host como grupo suplementar,
+  # permitindo que o processo airflow (uid 50000) use o socket sem rodar como root.
+  # O GID varia entre máquinas: descubra com `stat -c '%g' /var/run/docker.sock`
+  # e defina DOCKER_GID no .env.
   group_add:
-    - "984"
+    - "${DOCKER_GID:-984}"
   env_file:
     - .env
   environment: &airflow-common-env
@@ -24,6 +24,9 @@ x-airflow-common: &airflow-common
     - ./pipeline:/opt/airflow/pipeline
     - ./logs:/opt/airflow/logs
     - ./data/raw:/opt/airflow/data/raw
+    # O DockerOperator cria os containers dbt pela API do Docker. Atenção: acesso ao
+    # socket equivale a acesso root no host. Montá-lo como :ro NÃO restringe a API,
+    # por isso a montagem é explícita em leitura/escrita. Aceitável apenas em ambiente local.
     - /var/run/docker.sock:/var/run/docker.sock
 
   depends_on:
@@ -61,7 +64,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:?defina no .env}
     volumes:
       - postgres_gold_data:/var/lib/postgresql/data
-      - ./init:/docker-entrypoint-initdb.d
     ports:
       - "5432:5432"
     healthcheck:
@@ -153,21 +155,6 @@ services:
     networks:
       - uberlandia-net
 
-  dbt-core:
-    image: ${DBT_IMAGE:-ghcr.io/dbt-labs/dbt-postgres:1.8.2}
-    container_name: dbt-core
-    env_file:
-      - .env
-    volumes:
-      - ./dbt:/usr/app/dbt
-    working_dir: /usr/app/dbt
-    entrypoint: ["tail", "-f", "/dev/null"]
-    depends_on:
-      postgres-gold:
-        condition: service_healthy
-    networks:
-      - uberlandia-net
-
   streamlit_app:
     build:
       context: ./streamlit
@@ -204,4 +191,8 @@ volumes:
 
 networks:
   uberlandia-net:
+    # Nome fixo: sem isso o compose prefixa com o nome da pasta do projeto
+    # (ex.: refresco-data-case_uberlandia-net), e a DAG não acharia a rede
+    # se o repositório fosse clonado com outro nome.
+    name: uberlandia-net
     driver: bridge
