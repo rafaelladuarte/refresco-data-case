@@ -1,7 +1,8 @@
-import os
 import pandas as pd
 from sqlalchemy import create_engine, text
 import logging
+
+from pipeline.settings import postgres_url, s3_storage_options
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -9,21 +10,9 @@ logger = logging.getLogger(__name__)
 def load_to_staging():
     logger.info("Iniciando carga de dados da camada Silver para Staging (Postgres-Gold)")
     
-    endpoint_url = os.getenv("AIRFLOW__S3__ENDPOINT_URL", "http://localhost:9000")
-    storage_options = {
-        "key": os.getenv("AWS_ACCESS_KEY_ID", "minio"),
-        "secret": os.getenv("AWS_SECRET_ACCESS_KEY", "minio123"),
-        "client_kwargs": {"endpoint_url": endpoint_url}
-    }
+    storage_options = s3_storage_options()
     
-    pg_user = os.getenv("POSTGRES_USER", "uberlandia")
-    pg_pass = os.environ["POSTGRES_PASSWORD"]
-    pg_host = os.getenv("POSTGRES_HOST", "localhost")
-    pg_port = os.getenv("POSTGRES_PORT", "5432")
-    pg_db = os.getenv("POSTGRES_DB", "gold")
-    
-    engine_url = f"postgresql://{pg_user}:{pg_pass}@{pg_host}:{pg_port}/{pg_db}"
-    engine = create_engine(engine_url)
+    engine = create_engine(postgres_url())
     
     schema_name = 'load_stage'
     

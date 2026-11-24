@@ -135,9 +135,9 @@ O join é por `(ano, mes)`, então cada dia carrega a média e a soma de precipi
 
 - **Arquivos:** `docker-compose.yml:15` (Fernet key), `:41-43`, `:77-78`, `:91-92`, `:115-121`; defaults `"minio123"` em todos os scripts
 - **Critérios de aceite:**
-  - [ ] Fernet key, senhas do Airflow/pgAdmin/MinIO vindas do `.env`
-  - [ ] Scripts falham explicitamente sem credencial (sem default de senha)
-  - [ ] `.env.example` com todas as variáveis necessárias
+  - [x] Fernet key, senhas do Airflow/pgAdmin/MinIO vindas do `.env`
+  - [x] Scripts falham explicitamente sem credencial (sem default de senha)
+  - [x] `.env.example` com todas as variáveis necessárias
 
 ### INF-03 · Limpar serviços e artefatos sem uso
 `infra` · 🟢 Baixa · `P`

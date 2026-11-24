@@ -1,8 +1,9 @@
 import pandas as pd
 import s3fs
 import logging
-import os
 import re
+
+from pipeline.settings import s3_storage_options
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -20,12 +21,7 @@ def fix_encoding(text):
 def main():
     logger.info("Iniciando processamento Silver para Produtos")
     
-    endpoint_url = os.getenv("AIRFLOW__S3__ENDPOINT_URL", "http://localhost:9000")
-    storage_options = {
-        "key": os.getenv("AWS_ACCESS_KEY_ID", "minio"),
-        "secret": os.getenv("AWS_SECRET_ACCESS_KEY", "minio123"),
-        "client_kwargs": {"endpoint_url": endpoint_url}
-    }
+    storage_options = s3_storage_options()
     
     try:
         fs = s3fs.S3FileSystem(**storage_options)

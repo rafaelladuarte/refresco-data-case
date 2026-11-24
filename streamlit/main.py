@@ -131,11 +131,15 @@ st.markdown(
 
 @st.cache_resource(show_spinner="Conectando ao banco de dados...")
 def get_engine():
-    user     = os.getenv("POSTGRES_USER", "postgres")
-    password = os.getenv("POSTGRES_PASSWORD", "postgres")
+    missing = [v for v in ("POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB") if not os.getenv(v)]
+    if missing:
+        st.error(f"Variáveis de ambiente obrigatórias não definidas: {', '.join(missing)}")
+        st.stop()
+    user     = os.environ["POSTGRES_USER"]
+    password = os.environ["POSTGRES_PASSWORD"]
     host     = os.getenv("POSTGRES_HOST", "postgres-gold")
     port     = os.getenv("POSTGRES_PORT", "5432")
-    db       = os.getenv("POSTGRES_DB", "postgres")
+    db       = os.environ["POSTGRES_DB"]
     url      = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{db}"
     return create_engine(url)
 

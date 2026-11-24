@@ -6,6 +6,8 @@ from pathlib import Path
 import s3fs
 import io
 
+from pipeline.settings import s3_storage_options
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
@@ -18,12 +20,7 @@ BRONZE_DIR = "bronze"
 
 def get_s3_client():
     """Retorna uma nova instância do cliente S3FileSystem (fork-safe)"""
-    endpoint_url = os.getenv("AIRFLOW__S3__ENDPOINT_URL", "http://localhost:9000")
-    return s3fs.S3FileSystem(
-        key=os.getenv("AWS_ACCESS_KEY_ID", "minio"),
-        secret=os.getenv("AWS_SECRET_ACCESS_KEY", "minio123"),
-        client_kwargs={"endpoint_url": endpoint_url}
-    )
+    return s3fs.S3FileSystem(**s3_storage_options())
 
 def ensure_bucket_exists(fs, bucket_name):
     """Verifica e cria bucket se necessário"""
