@@ -124,11 +124,11 @@ O join é por `(ano, mes)`, então cada dia carrega a média e a soma de precipi
 
 - **Arquivos:** `requirements.txt`, `Dockerfile`, `Pipfile`, `.env.example`, `docker-compose.yml`
 - **Critérios de aceite:**
-  - [ ] `apache-airflow` removido do `requirements.txt`; instalação com o constraints file oficial
-  - [ ] Versões fixadas (`pandas==`, `s3fs==`, …)
-  - [ ] `pytest` movido para dependências de desenvolvimento
-  - [ ] Tags explícitas para MinIO, pgAdmin e dbt (`dbt-postgres:1.8.x`)
-  - [ ] Uma única fonte de verdade para a versão do Python e do Airflow
+  - [x] `apache-airflow` removido do `requirements.txt`; instalação com o constraints file oficial
+  - [x] Versões fixadas (`pandas==`, `s3fs==`, …)
+  - [x] `pytest` movido para dependências de desenvolvimento
+  - [x] Tags explícitas para MinIO, pgAdmin e dbt (`dbt-postgres:1.8.x`)
+  - [x] Uma única fonte de verdade para a versão do Python e do Airflow
 
 ### INF-02 · Remover segredos e credenciais hardcoded
 `infra` · 🟠 Média · `P`

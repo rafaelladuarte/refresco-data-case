@@ -37,8 +37,8 @@ DBT_PROJECT_HOST_PATH = _require_env('DBT_PROJECT_HOST_PATH')
 # Nome da rede Docker Compose (prefixo do projeto + nome no YAML)
 DOCKER_NETWORK = os.getenv('DOCKER_NETWORK', 'refresco-data-case_uberlandia-net')
 
-# Imagem dbt (mesma do docker-compose.yml)
-DBT_IMAGE = 'ghcr.io/dbt-labs/dbt-postgres:1.8.latest'
+# Imagem dbt com tag fixa. Fonte única: variável DBT_IMAGE no .env.
+DBT_IMAGE = os.getenv('DBT_IMAGE', 'ghcr.io/dbt-labs/dbt-postgres:1.8.2')
 
 # Variáveis de ambiente passadas ao container dbt pelo DockerOperator
 DBT_ENV_VARS = {

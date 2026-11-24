@@ -71,7 +71,7 @@ services:
       - uberlandia-net
 
   pgadmin:
-    image: dpage/pgadmin4:latest
+    image: dpage/pgadmin4:8.14
     container_name: pgadmin
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@admin.com
@@ -85,17 +85,19 @@ services:
       - uberlandia-net
 
   minio:
-    image: minio/minio:latest
+    # A imagem oficial minio/minio deixou de ser distribuída publicamente (Docker Hub/Quay).
+    # bitnamilegacy/minio é o último build público versionado; a imagem sobe o servidor
+    # e o console (porta 9001) automaticamente, sem necessidade de `command`.
+    image: bitnamilegacy/minio:2025.7.23-debian-12-r5
     container_name: minio
     environment:
       MINIO_ROOT_USER: minio
       MINIO_ROOT_PASSWORD: minio123
-    command: server /data --console-address ":9001"
     ports:
       - "9000:9000"
       - "9001:9001"
     volumes:
-      - minio_data:/data
+      - minio_data:/bitnami/minio/data
     networks:
       - uberlandia-net
 
@@ -146,7 +148,7 @@ services:
       - uberlandia-net
 
   dbt-core:
-    image: ghcr.io/dbt-labs/dbt-postgres:1.8.latest
+    image: ${DBT_IMAGE:-ghcr.io/dbt-labs/dbt-postgres:1.8.2}
     container_name: dbt-core
     env_file:
       - .env

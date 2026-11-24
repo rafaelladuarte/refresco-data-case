@@ -1,9 +1,12 @@
-apache-airflow
-pandas
-pyarrow
-sqlalchemy
-psycopg2-binary
-requests
-pytest
-python-dotenv
-s3fs
+# Dependências de runtime da imagem do Airflow.
+# Versões alinhadas ao constraints file oficial do Airflow 2.9.0 / Python 3.12:
+# https://raw.githubusercontent.com/apache/airflow/constraints-2.9.0/constraints-3.12.txt
+# Não adicionar apache-airflow aqui: a versão é controlada pelo Dockerfile.
+apache-airflow-providers-docker==3.9.2
+pandas==2.1.4
+pyarrow==15.0.2
+SQLAlchemy==1.4.52
+psycopg2-binary==2.9.9
+requests==2.31.0
+python-dotenv==1.0.1
+s3fs==2023.12.2
