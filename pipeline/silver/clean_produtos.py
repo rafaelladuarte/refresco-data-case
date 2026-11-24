@@ -48,7 +48,7 @@ def main():
         df["_ingested_at"] = pd.to_datetime(df["_ingested_at"], errors="coerce")
         
         # Normaliza id_produto: remove espaços e descarta formatos inválidos
-        df["id_produto"] = df["id_produto"].fillna("").astype(str).str.strip()
+        df["id_produto"] = df["id_produto"].fillna("").astype(str).str.strip().str.upper()
 
         mask_id_invalido = ~df["id_produto"].str.match(PATTERN_ID_PRODUTO)
         df_id_invalido = df[mask_id_invalido].copy()

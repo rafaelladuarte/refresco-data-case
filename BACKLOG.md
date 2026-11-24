@@ -108,14 +108,16 @@ O join é por `(ano, mes)`, então cada dia carrega a média e a soma de precipi
   - [ ] Comentário desatualizado ("apenas 2024") corrigido, assim como os limites `warn_if`/`error_if` no `schema.yml`
 
 ### DQ-08 · Deduplicar clientes pela chave natural
-`bug` · 🟠 Média · `P`
+`bug` · 🔴 Alta · `P`
 
 `clean_clientes` deduplica por `cnpj` (há 5 CNPJs duplicados), não por `id_cliente`.
 
+> Atualizado na Sprint 1: o dedup por CNPJ mantinha os recadastros sem vendas (C0200–C0204) e descartava os originais (C0001–C0005), mandando as vendas deles para a quarentena como órfãs. Além disso, o empate em `_ingested_at` fazia o resultado variar entre execuções.
+
 - **Arquivos:** `pipeline/silver/clean_clientes.py:76-77`
 - **Critérios de aceite:**
-  - [ ] Dedup por `id_cliente` (mais recente por `_ingested_at`)
-  - [ ] CNPJs duplicados entre clientes distintos registrados na quarentena/log como alerta
+  - [x] Dedup por `id_cliente` (mais recente por `_ingested_at`)
+  - [x] CNPJs duplicados entre clientes distintos registrados na quarentena/log como alerta
 
 ### INF-01 · Fixar versões de dependências e imagens
 `infra` · 🔴 Alta · `P`

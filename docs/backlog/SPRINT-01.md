@@ -167,6 +167,11 @@ Fase 6 – Validação    execução ponta a ponta + checklist da seção 5
   - A quarentena de vendas deixa de ter `id_cliente sem cadastro: C0001..C0005`.
   - `gold.fato_vendas` ganha 147 linhas.
   - `silver/_quarentena/clientes/` tem 5 linhas.
+- **Resultado da execução:**
+  - Regras extraídas para a função pura `deduplicate_clientes`, com ordenação estável (resultado determinístico) e quarentena com motivo.
+  - IDs padronizados em maiúsculas em clientes, produtos e vendas. A regex aceitava `c0002`, mas o join falharia.
+  - **141 vendas recuperadas** (não 147). As 6 restantes de C0001–C0005 são descartadas por outro motivo, descrito abaixo.
+  - ⚠️ **Achado novo:** `parse_mixed_dates` só reconhece `AAAA-MM-DD` e `DD/MM/AAAA`. Datas em `DD/MM/AA` (64) e `DD-MM-AAAA` (61) viram nulas e as **125 vendas (3,6%) são descartadas sem log nem quarentena**. Tratamento incorporado ao DQ-04.
 
 #### DQ-04 · Validar medidas de vendas
 - **`clean_vendas.py`:** generalizar a validação com uma lista de regras `(nome, máscara, mensagem)`, aplicadas junto com as regras referenciais que já existem, para manter um único ponto de quarentena:
@@ -176,7 +181,8 @@ Fase 6 – Validação    execução ponta a ponta + checklist da seção 5
   - Valores nulos nas três colunas também são rejeitados.
 - **`dbt/models/staging/schema.yml`:** adicionar `dbt_utils.accepted_range` em `qtd_caixas` (`min_value: 1`), `desconto_pct` (`0` a `1`, exclusivo) e `preco_unitario` (`min_value: 0`, exclusivo). É uma defesa em profundidade: se a regra da Silver regredir, o dbt falha.
 - **`vw_q4_margem_bruta.sql`:** remover `AND f.receita_liquida > 0`.
-- **Validação:** `select count(*) from gold.fato_vendas where receita_liquida <= 0` deve retornar 0 sem filtro na view, e a quarentena deve ter as 9 vendas com motivo legível.
+- **Escopo ampliado (achado do DQ-08):** `parse_mixed_dates` passa a reconhecer também `DD/MM/AA` e `DD-MM-AAAA`. Datas que continuarem inválidas vão para a quarentena com motivo, em vez de serem descartadas em silêncio.
+- **Validação:** `select count(*) from gold.fato_vendas where receita_liquida <= 0` deve retornar 0 sem filtro na view, e a quarentena deve ter as 9 vendas com motivo legível. As 125 vendas com data em formato alternativo devem chegar à fato.
 
 ### Fase 4: dbt
 

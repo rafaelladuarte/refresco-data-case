@@ -24,8 +24,8 @@ def parse_mixed_dates(date_series):
 
 
 def normalize_id(series: pd.Series) -> pd.Series:
-    """Remove espaços e converte None/NaN para string vazia para facilitar validação."""
-    return series.fillna("").astype(str).str.strip()
+    """Remove espaços, padroniza em maiúsculas e converte None/NaN para string vazia (facilita validação e joins)."""
+    return series.fillna("").astype(str).str.strip().str.upper()
 
 
 def validate_referential_integrity(
@@ -130,7 +130,7 @@ def main():
         # ------------------------------------------------------------------
         # IDs: vazio ("") em vez de nulo, pois as regras de validação comparam com string vazia
         for col in ["id_venda", "id_cliente", "id_produto"]:
-            df[col] = df[col].fillna("").astype(str).str.strip()
+            df[col] = df[col].fillna("").astype(str).str.strip().str.upper()
         # Atributos descritivos: nulo permanece nulo (sem virar "nan" ou "")
         for col in ["canal_venda", "representante"]:
             df[col] = clean_text(df[col])
