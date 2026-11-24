@@ -201,6 +201,10 @@ Fase 6 – Validação    execução ponta a ponta + checklist da seção 5
 - **`gold/schema.yml`:** recalcular `warn_if`/`error_if` (a série tem 4.018 dias e o clima cobre 2020–2025, ou seja, 2.192 dias) e corrigir as descrições.
 - **Verificar antes:** se o Streamlit usa `dim_tempo` diretamente. Hoje consome só as `vw_q*`.
 - **Validação:** `select count(distinct clima_precipitacao) from gold.dim_tempo where ano = 2024 and mes = 1` deve retornar mais de 1 (antes era 1 valor por mês).
+- **Resultado da execução:**
+  - Clima diário e as colunas `clima_temp_max_media_mes` / `clima_precipitacao_total_mes` (window functions). Jan/2024: 24 valores distintos de precipitação. A soma diária de 2024 bate com a soma dos totais mensais (1.097,9 mm).
+  - Limites do teste corrigidos: a configuração anterior combinava `severity: warn` com `error_if`, então o erro nunca disparava. Agora: alerta acima de 1.826 nulos, erro se nenhum dia tiver clima.
+  - Teste singular novo, `dbt/tests/assert_clima_cobre_dias_com_venda.sql`. Ele é orientado a dados (não depende de contagens fixas) e falha se algum dia com venda ficar sem clima. dbt: 51 testes PASS.
 
 #### DQ-06 · Regra por `tipo_lancamento` *(depende da D2)*
 - Criar `dbt/seeds/regra_tipo_lancamento.csv` e o seu `schema.yml`, com `unique`/`not_null` em `tipo_lancamento`.

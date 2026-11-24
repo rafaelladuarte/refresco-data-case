@@ -104,9 +104,10 @@ O join é por `(ano, mes)`, então cada dia carrega a média e a soma de precipi
 
 - **Arquivos:** `dbt/models/marts/gold/dim_tempo.sql:47-77`
 - **Critérios de aceite:**
-  - [ ] Join por `data_completa = data_clima::date`
-  - [ ] Agregados mensais, se necessários, em colunas próprias (`clima_temp_max_media_mes`)
-  - [ ] Comentário desatualizado ("apenas 2024") corrigido, assim como os limites `warn_if`/`error_if` no `schema.yml`
+  - [x] Join por `data_completa = data_clima::date`
+  - [x] Agregados mensais, se necessários, em colunas próprias (`clima_temp_max_media_mes`)
+  - [x] Comentário desatualizado ("apenas 2024") corrigido, assim como os limites `warn_if`/`error_if` no `schema.yml`
+  - [x] _(extra)_ Teste singular `assert_clima_cobre_dias_com_venda`: falha se algum dia com venda ficar sem clima
 
 ### DQ-08 · Deduplicar clientes pela chave natural
 `bug` · 🔴 Alta · `P`
