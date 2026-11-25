@@ -1,6 +1,6 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = [".", "scripts"]
 addopts = "-ra --strict-markers"
 markers = [
     "airflow: precisa do Airflow instalado (roda dentro da imagem do Airflow, no job e2e)",

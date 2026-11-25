@@ -14,6 +14,10 @@
 #   E2E_START_SERVICES=0   usa MinIO/Postgres já em execução (CI: service containers)
 #   E2E_MINIO_PORT / E2E_PG_PORT   portas dos serviços (padrão 19000 / 15432)
 #   E2E_DAG_TEST=0         pula o teste de integridade da DAG (precisa construir a imagem do Airflow)
+#   E2E_DAY2=0             pula o cenário do dia 2 (dados alterados na origem, segunda execução)
+#   E2E_ENFORCE_PENDING=1  no dia 2, checagens ainda pendentes de um card passam a falhar
+#   E2E_UPDATE_BASELINE=1  regrava tests/baseline/fingerprint.json com o resultado do dia 1. Use só
+#                          quando uma mudança de dados for intencional e justificada no commit.
 #   DBT_IMAGE              imagem do dbt (padrão: a mesma da DAG)
 set -euo pipefail
 
@@ -24,6 +28,9 @@ START_SERVICES="${E2E_START_SERVICES:-1}"
 MINIO_PORT="${E2E_MINIO_PORT:-19000}"
 PG_PORT="${E2E_PG_PORT:-15432}"
 DAG_TEST="${E2E_DAG_TEST:-1}"
+DAY2="${E2E_DAY2:-1}"
+BASELINE="$ROOT/tests/baseline/fingerprint.json"
+WORKDIR="$(mktemp -d)"
 DBT_IMAGE="${DBT_IMAGE:-ghcr.io/dbt-labs/dbt-postgres:1.8.2}"
 MINIO_IMAGE="${E2E_MINIO_IMAGE:-bitnamilegacy/minio:2025.7.23-debian-12-r5}"
 PG_IMAGE="${E2E_PG_IMAGE:-postgres:15}"
@@ -51,6 +58,7 @@ log() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 CONTAINERS=()
 cleanup() {
   local code=$?
+  rm -rf "$WORKDIR"
   if ((${#CONTAINERS[@]})); then
     log "Removendo serviços do teste"
     docker rm -f "${CONTAINERS[@]}" >/dev/null 2>&1 || true
@@ -89,19 +97,21 @@ import psycopg2, os
 psycopg2.connect(host='localhost', port=os.environ['POSTGRES_PORT'], user=os.environ['POSTGRES_USER'],
                  password=os.environ['POSTGRES_PASSWORD'], dbname=os.environ['POSTGRES_DB']).close()"
 
-log "Bronze"
-"$PYTHON" -m pipeline.bronze.ingest_csv
-"$PYTHON" -m pipeline.bronze.ingest_clima
+run_pipeline() {
+  log "Bronze"
+  "$PYTHON" -m pipeline.bronze.ingest_csv
+  "$PYTHON" -m pipeline.bronze.ingest_clima
 
-log "Silver"
-"$PYTHON" -m pipeline.silver.clean_clientes
-"$PYTHON" -m pipeline.silver.clean_produtos
-"$PYTHON" -m pipeline.silver.clean_financeiro
-"$PYTHON" -m pipeline.silver.clean_clima
-"$PYTHON" -m pipeline.silver.clean_vendas
+  log "Silver"
+  "$PYTHON" -m pipeline.silver.clean_clientes
+  "$PYTHON" -m pipeline.silver.clean_produtos
+  "$PYTHON" -m pipeline.silver.clean_financeiro
+  "$PYTHON" -m pipeline.silver.clean_clima
+  "$PYTHON" -m pipeline.silver.clean_vendas
 
-log "Carga no load_stage"
-"$PYTHON" -m pipeline.load.staging
+  log "Carga no load_stage"
+  "$PYTHON" -m pipeline.load.staging
+}
 
 dbt() {
   # --network host: o profiles.yml lê POSTGRES_HOST/PORT; o container enxerga o Postgres em localhost.
@@ -111,6 +121,9 @@ dbt() {
     "$DBT_IMAGE" "$@" --profiles-dir /usr/app/dbt
 }
 
+# ---------------------------------------------------------------- dia 1
+run_pipeline
+
 log "dbt deps / seed / build"
 dbt deps
 dbt seed
@@ -118,6 +131,47 @@ dbt build
 
 log "Verificação dos números de referência"
 "$PYTHON" scripts/e2e_verify.py
+
+# Fingerprint: o conteúdo de cada dataset do dia 1 precisa ser idêntico ao baseline versionado.
+# Só muda por decisão explícita (E2E_UPDATE_BASELINE=1), justificada no commit.
+log "Fingerprint dos datasets (dia 1)"
+"$PYTHON" scripts/fingerprint.py gerar "$WORKDIR/fingerprint.json"
+if [[ "${E2E_UPDATE_BASELINE:-0}" == "1" || ! -f "$BASELINE" ]]; then
+  mkdir -p "$(dirname "$BASELINE")"
+  cp "$WORKDIR/fingerprint.json" "$BASELINE"
+  echo "Baseline gravado em $BASELINE"
+else
+  "$PYTHON" scripts/fingerprint.py comparar "$BASELINE" "$WORKDIR/fingerprint.json"
+fi
+
+# ---------------------------------------------------------------- dia 2
+# Segunda execução sobre uma cópia de data/raw com três mudanças conhecidas (status financeiro de
+# uma venda antiga, uma venda retroativa e o nome de um cliente). Só elas podem aparecer.
+if [[ "$DAY2" == "1" ]]; then
+  log "Dia 2: dados alterados na origem"
+  "$PYTHON" scripts/e2e_mutate.py "$ROOT/data/raw" "$WORKDIR/data/raw" "$WORKDIR/mudancas.json"
+  AIRFLOW_HOME="$WORKDIR" run_pipeline
+
+  # MOD-01 pendente: o incremental perde a venda retroativa e o teste de reconciliação (MOD-02)
+  # acusa. Tolera só essa falha, e só enquanto E2E_ENFORCE_PENDING != 1; qualquer outra reprova.
+  log "dbt build (dia 2)"
+  dbt build || true
+  "$PYTHON" - <<'PY'
+import json, os, sys
+
+TOLERADAS = {"assert_fato_reconcilia_com_staging"}  # remover quando o MOD-01 for implementado
+resultados = json.load(open("dbt/target/run_results.json"))["results"]
+falhas = sorted(r["unique_id"].split(".")[-1] for r in resultados if r["status"] in ("fail", "error"))
+if os.environ.get("E2E_ENFORCE_PENDING") == "1":
+    inesperadas = falhas
+else:
+    inesperadas = [f for f in falhas if f not in TOLERADAS]
+for f in falhas:
+    print(f"[{'FALHA' if f in inesperadas else 'PENDENTE'}] dbt (dia 2): {f}")
+sys.exit(1 if inesperadas else 0)
+PY
+  "$PYTHON" scripts/e2e_verify_day2.py "$WORKDIR/mudancas.json"
+fi
 
 if [[ "$DAG_TEST" == "1" ]]; then
   log "Integridade da DAG (imagem do Airflow)"

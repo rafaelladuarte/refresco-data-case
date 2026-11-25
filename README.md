@@ -217,6 +217,8 @@ scripts/e2e.sh                       # sobe MinIO e Postgres descartáveis (port
 E2E_DAG_TEST=0 scripts/e2e.sh        # pula o build da imagem do Airflow (mais rápido)
 ```
 
+Depois do dia 1 ele compara o conteúdo de 28 datasets (Silver, quarentenas, `load_stage` e `gold`) com o baseline versionado em `tests/baseline/fingerprint.json`, o que prova que uma refatoração não mudou dados. Se a mudança de dados for intencional, regrave o baseline com `E2E_UPDATE_BASELINE=1` e justifique no commit. Em seguida roda um **dia 2**: uma cópia de `data/raw` com três mudanças conhecidas (status financeiro, venda retroativa e nome de cliente), conferindo que só elas aparecem.
+
 O script não lê o `.env` nem toca no ambiente de desenvolvimento. O clima vem de respostas gravadas da Open-Meteo em `tests/fixtures/open_meteo/` (variável `CLIMA_FIXTURE_DIR`), então o teste não depende da API.
 
 ### CI (GitHub Actions)
