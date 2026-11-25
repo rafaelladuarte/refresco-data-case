@@ -4,7 +4,7 @@ Calcula um hash do conteúdo ordenado de cada dataset (Silver, quarentenas e os 
 `load_stage` e `gold` do Postgres), ignorando colunas de controle que mudam a cada execução.
 
     python scripts/fingerprint.py gerar baseline.json     # lê MinIO e Postgres do ambiente
-    python scripts/fingerprint.py comparar baseline.json depois.json
+    python scripts/fingerprint.py comparar baseline.json depois.json [--ignorar PREFIXO ...]
 
 Usa as mesmas variáveis de ambiente do pipeline (POSTGRES_*, AWS_*, AIRFLOW__S3__ENDPOINT_URL).
 O `scripts/e2e.sh` gera o fingerprint quando E2E_FINGERPRINT_OUT está definida.
@@ -77,7 +77,10 @@ def gerar() -> dict:
     return resultado
 
 
-def comparar(a: dict, b: dict) -> int:
+def comparar(a: dict, b: dict, ignorar: tuple[str, ...] = ()) -> int:
+    """Compara dois fingerprints. `ignorar` descarta datasets cujo nome começa com algum prefixo."""
+    a = {k: v for k, v in a.items() if not k.startswith(ignorar)}
+    b = {k: v for k, v in b.items() if not k.startswith(ignorar)}
     diferentes = []
     for nome in sorted(set(a) | set(b)):
         if nome not in a:
@@ -101,9 +104,13 @@ def main(argv: list[str]) -> int:
             json.dump(resultado, f, indent=2, sort_keys=True)
         print(f"{len(resultado)} datasets gravados em {argv[2]}")
         return 0
-    if len(argv) == 4 and argv[1] == "comparar":
+    if len(argv) >= 4 and argv[1] == "comparar":
+        resto = argv[4:]
+        ignorar = tuple(
+            resto[i + 1] for i, arg in enumerate(resto) if arg == "--ignorar" and i + 1 < len(resto)
+        )
         with open(argv[2], encoding="utf-8") as f1, open(argv[3], encoding="utf-8") as f2:
-            return comparar(json.load(f1), json.load(f2))
+            return comparar(json.load(f1), json.load(f2), ignorar)
     print(__doc__, file=sys.stderr)
     return 2
 

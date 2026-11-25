@@ -1,10 +1,16 @@
+import sys
+
 import pandas as pd
 
 from pipeline.common.logging import get_logger
-from pipeline.common.storage import get_s3_client, read_bronze, write_silver
+from pipeline.common.logical_date import resolve_ds
+from pipeline.common.merge import merge_state
+from pipeline.common.storage import get_s3_client, read_bronze, read_silver_state, write_silver
 from pipeline.common.validators import PATTERN_ID_PRODUTO, clean_text, normalize_id
 
 logger = get_logger(__name__)
+
+SILVER_PATH = "s3://silver/produtos/produtos_clean.parquet"
 
 # Valor monetário sem significado (<= 0 ou ausente) vira nulo e ganha a flag `<flag> = False`
 VALORES_MONETARIOS = {"custo_unitario": "custo_disponivel", "preco_tabela": "preco_disponivel"}
@@ -27,14 +33,15 @@ def flag_valores_indisponiveis(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def main():
-    logger.info("Iniciando processamento Silver para Produtos")
+def main(ds: str | None = None):
+    ds = resolve_ds(ds)
+    logger.info(f"Iniciando processamento Silver para Produtos (partição {ds})")
 
     try:
         fs = get_s3_client()
-        df = read_bronze(fs, "produtos")
+        df = read_bronze(fs, "produtos", ds)
         if df is None:
-            return
+            raise FileNotFoundError(f"Partição Bronze de produtos não encontrada para {ds}")
         logger.info(f"Linhas lidas da Bronze: {len(df)}")
 
         for col in ["nome_produto", "familia", "marca", "embalagem"]:
@@ -82,7 +89,8 @@ def main():
             if sem_valor:
                 logger.warning(f"{len(sem_valor)} produtos sem {col} válido ({flag}=false): {sem_valor}")
 
-        write_silver(fs, df, "s3://silver/produtos/produtos_clean.parquet")
+        df = merge_state(read_silver_state(fs, SILVER_PATH), df, key=["id_produto"])
+        write_silver(fs, df, SILVER_PATH)
         logger.info("[OK] Tabela de Produtos salva com sucesso em silver/produtos/!")
 
     except Exception as e:
@@ -91,4 +99,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1] if len(sys.argv) > 1 else None)

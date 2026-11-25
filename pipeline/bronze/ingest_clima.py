@@ -1,5 +1,6 @@
 import io
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -8,6 +9,7 @@ import requests
 
 from pipeline.common.config import ClimaConfig
 from pipeline.common.logging import get_logger
+from pipeline.common.logical_date import resolve_ds
 from pipeline.common.storage import ensure_bucket, get_s3_client
 
 logger = get_logger(__name__)
@@ -93,7 +95,7 @@ def fetch_all_weather_data(config: ClimaConfig) -> pd.DataFrame:
     return final_df
 
 
-def save_to_bronze(df: pd.DataFrame, config: ClimaConfig):
+def save_to_bronze(df: pd.DataFrame, config: ClimaConfig, ds: str):
     fs = get_s3_client()
     try:
         if not ensure_bucket(fs, "bronze"):
@@ -103,11 +105,9 @@ def save_to_bronze(df: pd.DataFrame, config: ClimaConfig):
         df["_api_source"] = config.api_url
         df["latitude"] = config.latitude
         df["longitude"] = config.longitude
+        df["_logical_date"] = ds
 
-        ingestion_dt = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-        path = (
-            f"bronze/clima/ingestion_date={ingestion_dt}/" f"clima_{config.ano_inicio}_{config.ano_fim}.csv"
-        )
+        path = f"bronze/clima/ingestion_date={ds}/clima_{config.ano_inicio}_{config.ano_fim}.csv"
 
         csv_buffer = io.StringIO()
         df.to_csv(csv_buffer, index=False)
@@ -124,10 +124,11 @@ def save_to_bronze(df: pd.DataFrame, config: ClimaConfig):
         raise
 
 
-def main():
+def main(ds: str | None = None):
+    ds = resolve_ds(ds)
     config = ClimaConfig.from_env()
     logger.info(
-        f"Iniciando ingestão clima -> Bronze (MinIO) para {config.ano_inicio}-{config.ano_fim} "
+        f"Iniciando ingestão clima ({ds}) -> Bronze (MinIO) para {config.ano_inicio}-{config.ano_fim} "
         f"(latitude={config.latitude}, longitude={config.longitude})"
     )
 
@@ -140,10 +141,10 @@ def main():
         raise Exception(f"Falha de conexão com MinIO: {e}") from e
 
     df = fetch_all_weather_data(config)
-    save_to_bronze(df, config)
+    save_to_bronze(df, config, ds)
 
     logger.info("[OK] Ingestão finalizada")
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1] if len(sys.argv) > 1 else None)

@@ -66,3 +66,9 @@ class TestComparar:
         saida = capsys.readouterr().out
         assert "só no primeiro" in saida
         assert "só no segundo" in saida
+
+    def test_ignorar_descarta_datasets_pelo_prefixo(self, capsys):
+        b = {**self.A, "load_stage.stg_vendas": {"linhas": 1, "sha256": "z"}}
+        assert fp.comparar(self.A, b) == 1
+        assert fp.comparar(self.A, b, ignorar=("load_stage.stg_",)) == 0
+        assert "2 datasets idênticos, 0 diferentes" in capsys.readouterr().out.splitlines()[-1]

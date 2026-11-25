@@ -1,10 +1,22 @@
+import sys
+
 import pandas as pd
 
 from pipeline.common.logging import get_logger
-from pipeline.common.storage import get_s3_client, read_bronze, write_quarantine, write_silver
+from pipeline.common.logical_date import resolve_ds
+from pipeline.common.merge import merge_state
+from pipeline.common.storage import (
+    get_s3_client,
+    read_bronze,
+    read_silver_state,
+    write_quarantine,
+    write_silver,
+)
 from pipeline.common.validators import PATTERN_ID_CLIENTE, clean_text, normalize_id
 
 logger = get_logger(__name__)
+
+SILVER_PATH = "s3://silver/clientes/"
 
 # Sequências típicas de texto UTF-8 decodificado como Latin-1 (ex.: "Ã©" no lugar de "é")
 MOJIBAKE_MARKERS = ("Ã", "Â")
@@ -97,14 +109,15 @@ def deduplicate_clientes(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     return df.sort_values("id_cliente").reset_index(drop=True), df_quarentena
 
 
-def main():
-    logger.info("Iniciando processamento Silver para Clientes")
+def main(ds: str | None = None):
+    ds = resolve_ds(ds)
+    logger.info(f"Iniciando processamento Silver para Clientes (partição {ds})")
 
     try:
         fs = get_s3_client()
-        df = read_bronze(fs, "clientes")
+        df = read_bronze(fs, "clientes", ds)
         if df is None:
-            return
+            raise FileNotFoundError(f"Partição Bronze de clientes não encontrada para {ds}")
         logger.info(f"Linhas lidas inicialmente: {len(df)}")
 
         cols_str = ["nome_cliente", "canal", "regiao", "cidade", "uf", "representante"]
@@ -128,7 +141,8 @@ def main():
         df, df_quarentena = deduplicate_clientes(df)
         logger.info(f"Clientes aprovados (→ Silver): {len(df)}")
 
-        write_silver(fs, df, "s3://silver/clientes/", partition_cols=["regiao"])
+        df = merge_state(read_silver_state(fs, SILVER_PATH), df, key=["id_cliente"])
+        write_silver(fs, df, SILVER_PATH, partition_cols=["regiao"])
 
         # Quarentena gravada após a Silver: o bucket 'silver' é criado na escrita acima
         for motivo, grupo in df_quarentena.groupby("motivo_rejeicao"):
@@ -145,4 +159,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1] if len(sys.argv) > 1 else None)

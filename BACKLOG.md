@@ -108,10 +108,10 @@ _Achado na Sprint 1._ O container dbt roda como root, então `dbt/logs`, `dbt/ta
 Hoje cada execução grava uma partição com `datetime.now()` e a Silver relê `bronze/**` inteira: o custo cresce sem limite e não há backfill.
 
 - **Critérios de aceite:**
-  - [ ] Partição Bronze baseada em `{{ ds }}` / `logical_date`
-  - [ ] Reexecutar o mesmo dia sobrescreve a mesma partição (idempotente)
-  - [ ] Silver processa apenas as partições novas e faz merge com o estado atual
-  - [ ] Backfill de um período testado e documentado
+  - [x] Partição Bronze baseada em `{{ ds }}` / `logical_date`
+  - [x] Reexecutar o mesmo dia sobrescreve a mesma partição (idempotente)
+  - [x] Silver processa apenas as partições novas e faz merge com o estado atual
+  - [x] Backfill de um período testado e documentado _(e2e com duas datas, inclusive fora de ordem; o `airflow dags backfill` no ambiente real fica para a validação final da sprint)_
 
 ### ARQ-02 · Escrita atômica na Silver
 `eng-software` · 🟠 Média · `M`

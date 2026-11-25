@@ -79,3 +79,24 @@ def test_dbt_roda_com_usuario_do_host(dagbag):
         if task.task_id.startswith("dbt_"):
             assert task.user == "1000:1000"
             assert task.environment["HOME"] == "/tmp"
+
+
+TASKS_POR_DATA_LOGICA = [
+    "ingest_bronze_csv",
+    "ingest_bronze_clima",
+    "clean_clientes_silver",
+    "clean_produtos_silver",
+    "clean_financeiro_silver",
+    "clean_clima_silver",
+    "clean_vendas_silver",
+]
+
+
+@pytest.mark.parametrize("task_id", TASKS_POR_DATA_LOGICA)
+def test_tasks_bronze_e_silver_recebem_a_data_logica(dagbag, task_id):
+    """O PythonOperator injeta `ds` (data lógica) em quem declara o parâmetro: é o que torna a
+    partição Bronze e o merge da Silver idempotentes e permite backfill (ARQ-01)."""
+    import inspect
+
+    task = dagbag.dags[DAG_ID].get_task(task_id)
+    assert "ds" in inspect.signature(task.python_callable).parameters

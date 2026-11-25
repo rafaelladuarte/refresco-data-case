@@ -97,17 +97,23 @@ import psycopg2, os
 psycopg2.connect(host='localhost', port=os.environ['POSTGRES_PORT'], user=os.environ['POSTGRES_USER'],
                  password=os.environ['POSTGRES_PASSWORD'], dbname=os.environ['POSTGRES_DB']).close()"
 
-run_pipeline() {
-  log "Bronze"
-  "$PYTHON" -m pipeline.bronze.ingest_csv
-  "$PYTHON" -m pipeline.bronze.ingest_clima
+# Datas lógicas do cenário (a DAG passa `ds` do Airflow; aqui vão como argumento)
+DS_DIA1="2024-06-01"
+DS_DIA2="2024-06-02"
 
-  log "Silver"
-  "$PYTHON" -m pipeline.silver.clean_clientes
-  "$PYTHON" -m pipeline.silver.clean_produtos
-  "$PYTHON" -m pipeline.silver.clean_financeiro
-  "$PYTHON" -m pipeline.silver.clean_clima
-  "$PYTHON" -m pipeline.silver.clean_vendas
+# run_pipeline <ds>: Bronze -> Silver -> load_stage para a data lógica informada
+run_pipeline() {
+  local ds="$1"
+  log "Bronze ($ds)"
+  "$PYTHON" -m pipeline.bronze.ingest_csv "$ds"
+  "$PYTHON" -m pipeline.bronze.ingest_clima "$ds"
+
+  log "Silver ($ds)"
+  "$PYTHON" -m pipeline.silver.clean_clientes "$ds"
+  "$PYTHON" -m pipeline.silver.clean_produtos "$ds"
+  "$PYTHON" -m pipeline.silver.clean_financeiro "$ds"
+  "$PYTHON" -m pipeline.silver.clean_clima "$ds"
+  "$PYTHON" -m pipeline.silver.clean_vendas "$ds"
 
   log "Carga no load_stage"
   "$PYTHON" -m pipeline.load.staging
@@ -122,7 +128,7 @@ dbt() {
 }
 
 # ---------------------------------------------------------------- dia 1
-run_pipeline
+run_pipeline "$DS_DIA1"
 
 log "dbt deps / seed / build"
 dbt deps
@@ -153,7 +159,7 @@ fi
 if [[ "$DAY2" == "1" ]]; then
   log "Dia 2: dados alterados na origem"
   "$PYTHON" scripts/e2e_mutate.py "$ROOT/data/raw" "$WORKDIR/data/raw" "$WORKDIR/mudancas.json"
-  AIRFLOW_HOME="$WORKDIR" run_pipeline
+  AIRFLOW_HOME="$WORKDIR" run_pipeline "$DS_DIA2"
 
   # MOD-01 pendente: o incremental perde a venda retroativa e o teste de reconciliação (MOD-02)
   # acusa. Tolera só essa falha, e só enquanto E2E_ENFORCE_PENDING != 1; qualquer outra reprova.
@@ -174,6 +180,24 @@ for f in falhas:
 sys.exit(1 if inesperadas else 0)
 PY
   "$PYTHON" scripts/e2e_verify_day2.py "$WORKDIR/mudancas.json"
+
+  # Idempotência e backfill fora de ordem (ARQ-01). O estado atual (dia 2) é a referência.
+  log "Fingerprint do estado após o dia 2"
+  "$PYTHON" scripts/fingerprint.py gerar "$WORKDIR/fingerprint_dia2.json"
+
+  # (o load_to_staging ainda derruba as views stg_* com DROP CASCADE; ignoradas até o ARQ-03)
+  # Reexecuta o dia 2: mesma data lógica, mesmos dados -> nada pode mudar
+  log "Reexecução do dia 2 (idempotência)"
+  AIRFLOW_HOME="$WORKDIR" run_pipeline "$DS_DIA2"
+  "$PYTHON" scripts/fingerprint.py gerar "$WORKDIR/fingerprint_reexec.json"
+  "$PYTHON" scripts/fingerprint.py comparar "$WORKDIR/fingerprint_dia2.json" "$WORKDIR/fingerprint_reexec.json" --ignorar load_stage.stg_
+
+  # Reexecuta o dia 1 DEPOIS do dia 2 (backfill fora de ordem): a data lógica mais antiga não pode
+  # desfazer as mudanças do dia 2 na Silver. Compara só a Silver: o dbt não rodou de novo.
+  log "Backfill fora de ordem: dia 1 depois do dia 2"
+  run_pipeline "$DS_DIA1"
+  "$PYTHON" scripts/fingerprint.py gerar "$WORKDIR/fingerprint_backfill.json"
+  "$PYTHON" scripts/fingerprint.py comparar "$WORKDIR/fingerprint_dia2.json" "$WORKDIR/fingerprint_backfill.json" --ignorar load_stage.stg_
 fi
 
 if [[ "$DAG_TEST" == "1" ]]; then

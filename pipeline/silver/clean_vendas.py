@@ -1,10 +1,15 @@
+import sys
+
 import pandas as pd
 
 from pipeline.common.logging import get_logger
+from pipeline.common.logical_date import resolve_ds
+from pipeline.common.merge import merge_state
 from pipeline.common.storage import (
     get_s3_client,
     read_bronze,
     read_silver,
+    read_silver_state,
     write_quarantine,
     write_silver,
 )
@@ -16,6 +21,8 @@ from pipeline.common.validators import (
 )
 
 logger = get_logger(__name__)
+
+SILVER_PATH = "s3://silver/vendas/"
 
 # Formatos de data aceitos em data_emissao. São mutuamente exclusivos (uma string
 # casa com no máximo um), então a ordem não altera o resultado.
@@ -108,8 +115,9 @@ def validate_vendas(
     return df_ok, df_quarentena
 
 
-def main():
-    logger.info("Iniciando processamento Silver para Vendas")
+def main(ds: str | None = None):
+    ds = resolve_ds(ds)
+    logger.info(f"Iniciando processamento Silver para Vendas (partição {ds})")
 
     try:
         fs = get_s3_client()
@@ -117,9 +125,9 @@ def main():
         # ------------------------------------------------------------------
         # 1. Lê vendas da Bronze
         # ------------------------------------------------------------------
-        df = read_bronze(fs, "vendas")
+        df = read_bronze(fs, "vendas", ds)
         if df is None:
-            return
+            raise FileNotFoundError(f"Partição Bronze de vendas não encontrada para {ds}")
         logger.info(f"Linhas lidas da Bronze: {len(df)}")
 
         # ------------------------------------------------------------------
@@ -191,7 +199,8 @@ def main():
         # ------------------------------------------------------------------
         # 6. Salva apenas registros íntegros na Silver
         # ------------------------------------------------------------------
-        write_silver(fs, df_ok, "s3://silver/vendas/", partition_cols=["ano", "mes"])
+        df_ok = merge_state(read_silver_state(fs, SILVER_PATH), df_ok, key=["id_venda"])
+        write_silver(fs, df_ok, SILVER_PATH, partition_cols=["ano", "mes"])
         logger.info("[OK] Tabela de Vendas processada e salva com sucesso na Silver!")
 
     except Exception as e:
@@ -200,4 +209,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1] if len(sys.argv) > 1 else None)

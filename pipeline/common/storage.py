@@ -1,5 +1,6 @@
 """Acesso ao MinIO/S3: cliente, leitura da Bronze e escrita da Silver e da quarentena."""
 
+import re
 import time
 import uuid
 
@@ -39,17 +40,35 @@ def ensure_bucket(fs: s3fs.S3FileSystem, bucket_name: str) -> bool:
         return False
 
 
-def read_bronze(fs: s3fs.S3FileSystem, table: str) -> pd.DataFrame | None:
-    """Lê e concatena todos os CSVs de todas as partições de `bronze/<table>/`.
+PARTITION_DATE_PATTERN = re.compile(r"ingestion_date=(\d{4}-\d{2}-\d{2})$")
 
-    Retorna None (com warning) se não houver arquivos.
+
+def _warn_legacy_partitions(fs: s3fs.S3FileSystem, table: str) -> None:
+    """Partições antigas (`ingestion_date=<data>T<hora>`, de antes do ARQ-01) são ignoradas."""
+    legadas = [
+        p
+        for p in fs.glob(f"bronze/{table}/ingestion_date=*")
+        if not PARTITION_DATE_PATTERN.search(p.rstrip("/"))
+    ]
+    if legadas:
+        logger.warning(
+            f"{len(legadas)} partições Bronze antigas de '{table}' (com horário) são ignoradas; "
+            f"veja a limpeza única no README. Exemplo: {legadas[0]}"
+        )
+
+
+def read_bronze(fs: s3fs.S3FileSystem, table: str, ds: str) -> pd.DataFrame | None:
+    """Lê os CSVs da partição `bronze/<table>/ingestion_date=<ds>/`.
+
+    Retorna None (com warning) se a partição não existir.
     """
-    arquivos = fs.glob(f"bronze/{table}/**/*.csv")
+    _warn_legacy_partitions(fs, table)
+    arquivos = fs.glob(f"bronze/{table}/ingestion_date={ds}/*.csv")
     if not arquivos:
-        logger.warning(f"Nenhum arquivo encontrado em bronze/{table}/")
+        logger.warning(f"Nenhum arquivo encontrado em bronze/{table}/ingestion_date={ds}/")
         return None
 
-    logger.info(f"Encontrados {len(arquivos)} arquivos na Bronze. Lendo dados...")
+    logger.info(f"Lendo {len(arquivos)} arquivo(s) da partição ingestion_date={ds} de '{table}'...")
     storage_options = s3_storage_options()
     return pd.concat(
         [pd.read_csv(f"s3://{arquivo}", storage_options=storage_options) for arquivo in arquivos],
@@ -60,6 +79,20 @@ def read_bronze(fs: s3fs.S3FileSystem, table: str) -> pd.DataFrame | None:
 def read_silver(path: str) -> pd.DataFrame:
     """Lê um dataset Parquet da Silver (arquivo ou diretório particionado)."""
     return pd.read_parquet(path, storage_options=s3_storage_options())
+
+
+def read_silver_state(fs: s3fs.S3FileSystem, path: str) -> pd.DataFrame | None:
+    """Estado atual de uma tabela Silver para o merge, ou None se ela ainda não existe.
+
+    Colunas de partição voltam do Parquet como categóricas; aqui elas retornam ao tipo original,
+    para que o merge e a regravação não misturem tipos.
+    """
+    if not fs.exists(_key(path)):
+        return None
+    df = read_silver(path)
+    for coluna in df.select_dtypes("category").columns:
+        df[coluna] = df[coluna].astype(df[coluna].cat.categories.dtype)
+    return df
 
 
 def _key(path: str) -> str:

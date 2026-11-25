@@ -1,19 +1,26 @@
+import sys
+
 import pandas as pd
 
 from pipeline.common.logging import get_logger
-from pipeline.common.storage import get_s3_client, read_bronze, write_silver
+from pipeline.common.logical_date import resolve_ds
+from pipeline.common.merge import merge_state
+from pipeline.common.storage import get_s3_client, read_bronze, read_silver_state, write_silver
 
 logger = get_logger(__name__)
 
+SILVER_PATH = "s3://silver/clima/"
 
-def main():
-    logger.info("Iniciando processamento Silver para Clima")
+
+def main(ds: str | None = None):
+    ds = resolve_ds(ds)
+    logger.info(f"Iniciando processamento Silver para Clima (partição {ds})")
 
     try:
         fs = get_s3_client()
-        df = read_bronze(fs, "clima")
+        df = read_bronze(fs, "clima", ds)
         if df is None:
-            return
+            raise FileNotFoundError(f"Partição Bronze de clima não encontrada para {ds}")
         logger.info(f"Linhas lidas inicialmente: {len(df)}")
 
         df["time"] = pd.to_datetime(df["time"], errors="coerce")
@@ -43,10 +50,20 @@ def main():
         logger.info(f"Processamento concluído. Linhas finais: {len(df)}")
 
         df_silver = df[
-            ["time", "temperature_2m_max", "precipitation_sum", "_ingested_at", "_api_source", "ano", "mes"]
+            [
+                "time",
+                "temperature_2m_max",
+                "precipitation_sum",
+                "_ingested_at",
+                "_logical_date",
+                "_api_source",
+                "ano",
+                "mes",
+            ]
         ]
 
-        write_silver(fs, df_silver, "s3://silver/clima/", partition_cols=["ano", "mes"])
+        df_silver = merge_state(read_silver_state(fs, SILVER_PATH), df_silver, key=["time"])
+        write_silver(fs, df_silver, SILVER_PATH, partition_cols=["ano", "mes"])
         logger.info("[OK] Tabela de Clima processada e salva com sucesso na Silver!")
 
     except Exception as e:
@@ -55,4 +72,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1] if len(sys.argv) > 1 else None)

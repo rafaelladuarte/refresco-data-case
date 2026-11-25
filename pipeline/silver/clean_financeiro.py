@@ -1,10 +1,16 @@
+import sys
+
 import pandas as pd
 
 from pipeline.common.logging import get_logger
-from pipeline.common.storage import get_s3_client, read_bronze, write_silver
+from pipeline.common.logical_date import resolve_ds
+from pipeline.common.merge import merge_state
+from pipeline.common.storage import get_s3_client, read_bronze, read_silver_state, write_silver
 from pipeline.common.validators import clean_text
 
 logger = get_logger(__name__)
+
+SILVER_PATH = "s3://silver/financeiro/"
 
 # Variações de tipo_lancamento na origem (já em maiúsculas e sem pontos) → domínio padrão
 MAP_TIPO_LANCAMENTO = {
@@ -43,14 +49,15 @@ def parse_competencia(series: pd.Series) -> pd.Series:
     )
 
 
-def main():
-    logger.info("Iniciando processamento Silver para Financeiro")
+def main(ds: str | None = None):
+    ds = resolve_ds(ds)
+    logger.info(f"Iniciando processamento Silver para Financeiro (partição {ds})")
 
     try:
         fs = get_s3_client()
-        df = read_bronze(fs, "financeiro")
+        df = read_bronze(fs, "financeiro", ds)
         if df is None:
-            return
+            raise FileNotFoundError(f"Partição Bronze de financeiro não encontrada para {ds}")
         logger.info(f"Linhas lidas da Bronze: {len(df)}")
 
         df["_ingested_at"] = pd.to_datetime(df["_ingested_at"], errors="coerce")
@@ -74,13 +81,16 @@ def main():
                 "status_padrao",
                 "ano",
                 "mes",
+                "_ingested_at",
+                "_logical_date",
             ]
         ].copy()
         df_silver = df_silver.dropna(subset=["ano", "mes"])
 
         logger.info(f"Deduplicação concluída. Linhas finais: {len(df_silver)}")
 
-        write_silver(fs, df_silver, "s3://silver/financeiro/", partition_cols=["ano", "mes"])
+        df_silver = merge_state(read_silver_state(fs, SILVER_PATH), df_silver, key=["id_financeiro"])
+        write_silver(fs, df_silver, SILVER_PATH, partition_cols=["ano", "mes"])
         logger.info("[OK] Tabela de Financeiro processada e salva com sucesso na Silver!")
 
     except Exception as e:
@@ -89,4 +99,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1] if len(sys.argv) > 1 else None)

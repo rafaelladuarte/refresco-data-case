@@ -150,6 +150,15 @@ Fase 6 – Validação          PR com a CI verde + DAG no ambiente real + backf
 - **Backfill:** `airflow dags backfill` sobre um período, na ordem e fora de ordem; o resultado final precisa ser igual. Documentado no README.
 - **Testes:** idempotência (rodar duas vezes o mesmo dia = mesmo resultado), precedência por `logical_date` e não por relógio, `_changed_at` estável sem mudança de conteúdo, e merge com chave nova, alterada e removida da origem.
 - **Validação:** o e2e de dois dias; no dia 1 os números de referência (3.482 / 18 / 5) se mantêm.
+- **Resultado da execução:**
+  - **Refinamento da D2 (marca d'água):** a Silver não usa `max(_logical_date)` como marca d'água. Cada execução processa **exatamente a partição da sua `ds`** e faz o merge com precedência por data lógica. Com marca d'água, o backfill de uma data antiga (anterior à marca) seria pulado; com a partição da `ds`, qualquer ordem funciona, e o custo de leitura da Bronze continua limitado a uma partição. Partição ausente para a data vira erro (`FileNotFoundError`), em vez de o task terminar "com sucesso" sem fazer nada.
+  - **Data lógica:** `main(ds=None)` em Bronze e Silver. No Airflow o `PythonOperator` injeta `ds` em quem declara esse parâmetro (a DAG não mudou); fora dele, `python -m pipeline.silver.clean_vendas 2024-06-01`, e sem argumento vale "hoje". Teste da DAG confirma que as 7 tasks recebem `ds`.
+  - **Bronze:** `ingestion_date=<ds>` e coluna `_logical_date`. Partições antigas (com horário) são ignoradas com um warning (D1-A); `scripts/cleanup_legacy_bronze.py` as lista (dry-run) e, com `--apply`, as apaga.
+  - **`pipeline/common/merge.py`:** `merge_state` (precedência `_logical_date`, `_ingested_at`; `_changed_at` só avança se `_row_hash` mudar; linha que some da origem permanece), `row_hash` (nulos equivalentes, ordem de colunas irrelevante). Aceita uma Silver antiga sem colunas de controle (o primeiro merge as completa; as linhas existentes podem ter `_changed_at` renovado uma vez).
+  - **Bug evitado:** o `concat` do pandas 2.1.4 quebra ao misturar `datetime64[ns]` com outras resoluções (que o Parquet ou um escalar `Timestamp` podem produzir). O merge normaliza as datas de controle para `ns`.
+  - **Testes (243 no total):** 27 do merge (idempotência, backfill fora de ordem, ordem de execução irrelevante, chave composta, Silver antiga), data lógica, leitura da Bronze por data com aviso de partições antigas, `read_silver_state` (colunas de partição voltam ao tipo original), ingestão por partição (idempotente) e a limpeza das partições antigas.
+  - **e2e:** o dia 1 roda com `ds=2024-06-01` e o dia 2 com `2024-06-02`. Depois do dia 2, o e2e reexecuta o dia 2 (idempotência) e o **dia 1 depois do dia 2** (backfill fora de ordem), e exige que a Silver fique idêntica por fingerprint. O dia 1 continua idêntico ao baseline (28 datasets).
+  - **Fora desta execução:** o backfill com `airflow dags backfill` no ambiente real (Fase 6) e a unicidade de CNPJ entre datas (dentro da partição segue valendo; entre datas fica para o ARQ-05).
 
 ### Fase 3: ARQ-05 · Quarentena genérica e auditoria
 

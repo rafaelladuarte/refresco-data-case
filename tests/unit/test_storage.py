@@ -1,6 +1,6 @@
 """Testes de pipeline.common.storage com um filesystem falso (sem MinIO)."""
 
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
@@ -45,27 +45,57 @@ class TestEnsureBucket:
 
 
 class TestReadBronze:
-    def test_sem_arquivos_retorna_none(self, fs):
+    def test_particao_inexistente_retorna_none(self, fs):
         fs.glob.return_value = []
-        assert storage.read_bronze(fs, "vendas") is None
-        fs.glob.assert_called_once_with("bronze/vendas/**/*.csv")
+        assert storage.read_bronze(fs, "vendas", "2024-06-01") is None
+        fs.glob.assert_any_call("bronze/vendas/ingestion_date=2024-06-01/*.csv")
 
-    def test_concatena_todas_as_particoes_com_indice_novo(self, fs):
-        fs.glob.return_value = [
-            "bronze/vendas/ingestion_date=1/v.csv",
-            "bronze/vendas/ingestion_date=2/v.csv",
-        ]
+    def test_le_somente_a_particao_da_data(self, fs):
+        fs.glob.side_effect = lambda padrao: (
+            ["bronze/vendas/ingestion_date=2024-06-01/vendas.csv"] if padrao.endswith("*.csv") else []
+        )
+        with patch.object(storage.pd, "read_csv", return_value=pd.DataFrame({"id": ["A"]})) as read_csv:
+            df = storage.read_bronze(fs, "vendas", "2024-06-01")
+        assert df["id"].tolist() == ["A"]
+        read_csv.assert_called_once_with(
+            "s3://bronze/vendas/ingestion_date=2024-06-01/vendas.csv", storage_options=OPTS
+        )
+
+    def test_varios_arquivos_na_particao_sao_concatenados_com_indice_novo(self, fs):
+        fs.glob.side_effect = lambda padrao: (
+            ["bronze/clima/ingestion_date=2024-06-01/a.csv", "bronze/clima/ingestion_date=2024-06-01/b.csv"]
+            if padrao.endswith("*.csv")
+            else []
+        )
         partes = [pd.DataFrame({"id": ["A"]}), pd.DataFrame({"id": ["B", "C"]})]
-        with patch.object(storage.pd, "read_csv", side_effect=partes) as read_csv:
-            df = storage.read_bronze(fs, "vendas")
+        with patch.object(storage.pd, "read_csv", side_effect=partes):
+            df = storage.read_bronze(fs, "clima", "2024-06-01")
         assert df["id"].tolist() == ["A", "B", "C"]
         assert df.index.tolist() == [0, 1, 2]
-        read_csv.assert_has_calls(
+
+    def test_particoes_antigas_com_horario_sao_ignoradas_com_aviso(self, fs, caplog):
+        fs.glob.side_effect = lambda padrao: (
             [
-                call("s3://bronze/vendas/ingestion_date=1/v.csv", storage_options=OPTS),
-                call("s3://bronze/vendas/ingestion_date=2/v.csv", storage_options=OPTS),
+                "bronze/vendas/ingestion_date=2024-06-01",
+                "bronze/vendas/ingestion_date=2024-05-30T12:00:01",
             ]
+            if padrao.endswith("ingestion_date=*")
+            else []
         )
+        with caplog.at_level("WARNING"):
+            assert storage.read_bronze(fs, "vendas", "2024-06-01") is None
+        avisos = [r.message for r in caplog.records if "antigas" in r.message]
+        assert len(avisos) == 1
+        assert "1 partições Bronze antigas" in avisos[0]
+        assert "2024-05-30T12:00:01" in avisos[0]
+
+    def test_sem_particoes_antigas_nao_avisa(self, fs, caplog):
+        fs.glob.side_effect = lambda padrao: (
+            ["bronze/vendas/ingestion_date=2024-06-01"] if padrao.endswith("ingestion_date=*") else []
+        )
+        with caplog.at_level("WARNING"):
+            storage.read_bronze(fs, "vendas", "2024-06-01")
+        assert not [r for r in caplog.records if "antigas" in r.message]
 
 
 def test_read_silver_usa_as_credenciais():
@@ -284,3 +314,30 @@ class TestWriteQuarantine:
         ):
             storage.write_quarantine(memfs, pd.DataFrame({"id": ["novo"]}), "vendas")
         assert ler(memfs, "silver/_quarentena/vendas") == ["x"]
+
+
+class TestReadSilverState:
+    def test_tabela_inexistente_retorna_none(self, memfs):
+        assert storage.read_silver_state(memfs, "s3://silver/vendas/") is None
+
+    def test_colunas_de_particao_voltam_ao_tipo_original(self, memfs):
+        storage.write_silver(memfs, df_v("a", "b"), "s3://silver/vendas/", ["ano", "mes"])
+        with patch.object(
+            storage,
+            "read_silver",
+            side_effect=lambda p: pd.read_parquet(p.removeprefix("s3://"), filesystem=memfs),
+        ):
+            df = storage.read_silver_state(memfs, "s3://silver/vendas/")
+        assert not df.select_dtypes("category").columns.tolist()
+        assert df["ano"].dtype.kind == "i"
+        assert sorted(df["id"]) == ["a", "b"]
+
+    def test_arquivo_unico_tambem_e_lido(self, memfs):
+        storage.write_silver(memfs, df_v("a"), "s3://silver/produtos/produtos_clean.parquet")
+        with patch.object(
+            storage,
+            "read_silver",
+            side_effect=lambda p: pd.read_parquet(p.removeprefix("s3://"), filesystem=memfs),
+        ):
+            df = storage.read_silver_state(memfs, "s3://silver/produtos/produtos_clean.parquet")
+        assert df["id"].tolist() == ["a"]

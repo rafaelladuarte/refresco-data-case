@@ -180,7 +180,29 @@ docker compose up -d --build
 
 > **Atualizando um ambiente da Sprint 1.** A partir do DQ-09, P012/P019 têm `custo_total`/`margem_bruta` NULL na `fato_vendas`. Como ela é incremental, as vendas antigas só são recalculadas com `dbt run --full-refresh --select fato_vendas+` (uma vez, depois de rodar a DAG; o `+` recria as views analíticas, que o full-refresh derruba em cascata).
 
+> **Atualizando um ambiente da Sprint 2 (partições Bronze por data).** A partir do ARQ-01 a Bronze é particionada pela data lógica da execução (`ingestion_date=YYYY-MM-DD`), e a Silver processa só a partição da data. As partições antigas, com horário (`ingestion_date=2026-11-25T12:17:55`), são **ignoradas** com um warning. Para removê-las uma única vez (lista primeiro, e só apaga com `--apply`):
+> `python scripts/cleanup_legacy_bronze.py` e depois `python scripts/cleanup_legacy_bronze.py --apply` (com as variáveis do `.env` exportadas), ou `docker compose down -v` num ambiente de teste. A Silver gravada antes desta mudança é aceita: as colunas de controle são completadas no primeiro merge.
+
 > **Atualizando um ambiente antigo.** Se você já tinha o ambiente rodando antes da Sprint 1, as credenciais e o volume do MinIO mudaram. Recrie os volumes com `docker compose down -v`. Isso apaga os dados locais, que se recriam rodando a DAG. Se preferir manter os volumes, a `fato_vendas` (incremental) ganhou colunas e precisa de um `dbt run --full-refresh --select fato_vendas+`.
+
+### Reprocessamento e backfill
+
+Cada execução da DAG tem uma **data lógica** (`{{ ds }}`). Bronze e Silver trabalham só com a partição dessa data:
+
+- **Bronze:** grava `bronze/<tabela>/ingestion_date=<ds>/`. Reexecutar a mesma data sobrescreve o mesmo objeto.
+- **Silver:** lê a partição da data, valida e faz *merge* com o estado atual por chave natural. Quem vence é a versão de **maior data lógica** (depois, a ingerida por último), então um backfill de uma data antiga nunca desfaz uma data mais nova, mesmo rodando depois. Reexecutar uma data dá o mesmo resultado.
+- **Colunas de controle** em toda tabela Silver: `_logical_date`, `_ingested_at`, `_row_hash` (hash do conteúdo de negócio) e `_changed_at` (só avança quando o conteúdo da linha muda).
+
+```bash
+# Reprocessar uma data (a DAG tem catchup=False; backfill é explícito)
+docker compose exec airflow-scheduler airflow dags backfill dag_etl_pipeline \
+  --start-date 2026-11-20 --end-date 2026-11-22
+
+# Uma tarefa avulsa, fora do Airflow, para uma data
+python -m pipeline.silver.clean_vendas 2026-11-20
+```
+
+A fonte (`data/raw`) é um *snapshot* completo a cada execução, não uma sequência de deltas. Consequências assumidas: uma linha que **some** da origem permanece na Silver (o merge nunca apaga), e a unicidade de CNPJ entre clientes é aplicada dentro da partição da data, não entre datas.
 
 ---
 
@@ -278,12 +300,11 @@ Limitações assumidas conscientemente, com o card correspondente no [BACKLOG](B
 
 | Limitação | Impacto | Card |
 |---|---|---|
-| Cada execução reprocessa toda a Bronze (partição por timestamp, sem `logical_date`) | O custo cresce a cada execução; sem backfill | ARQ-01 |
-| A Silver é sobrescrita com `rm` + `write`, sem atomicidade | Uma falha no meio deixa a Silver parcial | ARQ-02 |
+| O merge da Silver nunca apaga: linha que some da origem permanece | Cadastro removido na fonte continua na Silver; CNPJ duplicado entre datas não é detectado | ARQ-05 |
+| A troca da escrita atômica no S3 não é instantânea (o S3 não tem `rename`) | Janela de poucos segundos, com recuperação automática na próxima escrita | — |
 | A carga usa `DROP TABLE ... CASCADE` e tipos inferidos pelo pandas | Força recriar as views `stg_*` a cada execução | ARQ-03 |
 | O incremental da fato filtra por `data_emissao` | Status financeiro atualizado depois não é reprocessado | MOD-01 |
-| Sem CI | Testes unitários e e2e rodados manualmente | ENG-03 |
-| Execuções simultâneas corromperiam a Silver (`rm` + escrita) | Mitigado com `max_active_runs=1`; a correção estrutural é a escrita atômica | ARQ-01, ARQ-02 |
+| Execuções simultâneas da DAG | Continua em `max_active_runs=1`; a escrita atômica protege a Silver de falhas, não de concorrência | — |
 | As metas são fictícias e os dados são sintéticos, com tipos de lançamento uniformes | Números ilustrativos, não comerciais | — |
 | Clima de uma única coordenada (Uberlândia) para 4 mesorregiões | Correlação clima × vendas aproximada | backlog |
 | `docker.sock` montado no Airflow | Equivale a acesso root no host; aceitável só em ambiente local | — |
