@@ -15,7 +15,6 @@
 #   E2E_MINIO_PORT / E2E_PG_PORT   portas dos serviços (padrão 19000 / 15432)
 #   E2E_DAG_TEST=0         pula o teste de integridade da DAG (precisa construir a imagem do Airflow)
 #   E2E_DAY2=0             pula o cenário do dia 2 (dados alterados na origem, segunda execução)
-#   E2E_ENFORCE_PENDING=1  no dia 2, checagens ainda pendentes de um card passam a falhar
 #   E2E_UPDATE_BASELINE=1  regrava tests/baseline/fingerprint.json com o resultado do dia 1. Use só
 #                          quando uma mudança de dados for intencional e justificada no commit.
 #   DBT_IMAGE              imagem do dbt (padrão: a mesma da DAG)
@@ -166,25 +165,19 @@ if [[ "$DAY2" == "1" ]]; then
   log "Views stg_* depois da carga (sem dbt)"
   "$PYTHON" scripts/e2e_views_check.py "$WORKDIR/mudancas.json"
 
-  # MOD-01 pendente: o incremental perde a venda retroativa e o teste de reconciliação (MOD-02)
-  # acusa. Tolera só essa falha, e só enquanto E2E_ENFORCE_PENDING != 1; qualquer outra reprova.
+  # dbt build completo: inclui o teste de reconciliação fato x staging e o resto da Gold. Qualquer falha
+  # reprova (MOD-01: o incremental agora propaga a venda retroativa e a mudança de status).
   log "dbt build (dia 2)"
-  dbt build || true
-  "$PYTHON" - <<'PY'
-import json, os, sys
+  dbt build
 
-TOLERADAS = {"assert_fato_reconcilia_com_staging"}  # remover quando o MOD-01 for implementado
-resultados = json.load(open("dbt/target/run_results.json"))["results"]
-falhas = sorted(r["unique_id"].split(".")[-1] for r in resultados if r["status"] in ("fail", "error"))
-if os.environ.get("E2E_ENFORCE_PENDING") == "1":
-    inesperadas = falhas
-else:
-    inesperadas = [f for f in falhas if f not in TOLERADAS]
-for f in falhas:
-    print(f"[{'FALHA' if f in inesperadas else 'PENDENTE'}] dbt (dia 2): {f}")
-sys.exit(1 if inesperadas else 0)
-PY
   E2E_DS="$DS_DIA2" "$PYTHON" scripts/e2e_verify_day2.py "$WORKDIR/mudancas.json"
+
+  # Lookback (MOD-01): o custo do P001 mudou, mas nenhuma venda mudou. Fora da janela de 30 dias o
+  # `dbt build` não recalcula as vendas antigas (limitação documentada); com a janela ampliada, sim.
+  log "Lookback do incremental: mudança de dimensão em vendas antigas"
+  "$PYTHON" scripts/e2e_lookback_check.py antes "$WORKDIR/mudancas.json"
+  dbt run --select fato_vendas --vars '{lookback_days: 100000}'
+  "$PYTHON" scripts/e2e_lookback_check.py depois "$WORKDIR/mudancas.json"
 
   # Idempotência e backfill fora de ordem (ARQ-01). O estado atual (dia 2) é a referência.
   log "Fingerprint do estado após o dia 2"

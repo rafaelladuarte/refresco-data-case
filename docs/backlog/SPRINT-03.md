@@ -196,6 +196,11 @@ Fase 6 – Validação          PR com a CI verde + DAG no ambiente real + backf
 - **`stg_financeiro`** passa a expor `ingested_at` e `changed_at` (hoje o `ingested_at` não é selecionado), e a fato ganha `atualizado_em`.
 - **Teste negativo (e2e de dois dias):** alterar o status financeiro de uma venda antiga e confirmar a propagação para a fato **sem** `--full-refresh`. Esse caso falha na implementação atual.
 - **Documentar:** mudanças em dimensões fora da janela de lookback exigem `dbt run --full-refresh --select fato_vendas+` (comando já descrito no README).
+- **Resultado da execução:**
+  - **`fato_vendas`:** `incremental_strategy='merge'` (`unique_key = id_venda`) e `on_schema_change='append_new_columns'`. Nova coluna `atualizado_em` = maior `changed_at` entre a venda e o lançamento financeiro dela. O filtro incremental é `atualizado_em > max(atualizado_em)` **ou** `data_emissao >= current_date - var('lookback_days', 30)`. `stg_vendas` e `stg_financeiro` expõem `changed_at` (e `stg_financeiro` também `ingested_at`). Em um ambiente que já tinha a fato, as linhas antigas têm `atualizado_em` nulo e o `max()` as ignora, então a primeira execução reprocessa tudo uma vez.
+  - **Os dois casos que o dia 2 do e2e acusava passaram a ser exigidos** (sem `--full-refresh`): o status financeiro da venda antiga chega como `CANCELADO` e a venda retroativa `V900001` entra (fato = 3.483 = `stg_vendas`, e o teste de reconciliação do MOD-02 passa). Saiu a tolerância ao `assert_fato_reconcilia_com_staging` e o `E2E_ENFORCE_PENDING`.
+  - **Lookback provado com uma mudança de dimensão:** o dia 2 também muda o custo do P001 (2,10 → 2,55), sem tocar em nenhuma venda. Com a janela padrão, as vendas antigas do P001 **continuam com 2,10** (limitação real e documentada, porque as vendas de 2024 estão fora dos 30 dias); com `--vars '{lookback_days: 100000}'` passam a 2,55.
+  - **Sem regressão:** dia 1 com os 31 datasets idênticos ao baseline (a fato ganhou `atualizado_em`, coluna de controle ignorada pelo fingerprint); `dbt build` com 92 itens (um `not_null` novo em `atualizado_em`); idempotência e backfill fora de ordem com 31 datasets idênticos.
 
 ### Fase 5: ARQ-04 · Regras de negócio no dbt
 

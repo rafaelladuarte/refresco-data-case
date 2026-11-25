@@ -174,7 +174,7 @@ erDiagram
 - **Surrogate keys:** hash MD5 (`dbt_utils.generate_surrogate_key`) da chave natural, exceto `sk_tempo`, que é `YYYYMMDD`. As chaves são estáveis entre execuções.
 - **Dimensões:** SCD tipo 1 (estado mais recente). Histórico de clientes (SCD2) está no backlog (MOD-05).
 - **`dim_representante`** é derivada das vendas por (nome, canal). A revisão está no backlog (MOD-03).
-- **`fato_vendas`** é incremental (`unique_key = id_venda`). O filtro atual por `data_emissao` não reprocessa atualizações tardias (card MOD-01).
+- **`fato_vendas`** é incremental por **mudança** (`incremental_strategy = merge`, `unique_key = id_venda`). Uma venda é reprocessada quando ela ou o lançamento financeiro dela mudou depois da última carga (`atualizado_em`, derivado do `_changed_at` da Silver) ou quando foi emitida nos últimos `lookback_days` dias (padrão 30). O lookback cobre mudanças nas dimensões (ex.: custo de produto), que não alteram a venda.
 
 ## 5. Views analíticas
 

@@ -26,6 +26,8 @@ renamed as (
         
         -- metadados
         cast(_ingested_at as timestamp) as ingested_at,
+        -- só avança quando o conteúdo da venda muda (Silver: _changed_at); base do incremental da fato
+        cast(_changed_at as timestamp) as changed_at,
         cast(_source_file as text) as source_file
 
     from source

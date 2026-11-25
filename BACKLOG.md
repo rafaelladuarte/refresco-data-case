@@ -140,9 +140,9 @@ O filtro `data_emissao > max(data_emissao)` perde vendas retroativas e atualiza�
 
 - **Arquivos:** `dbt/models/marts/gold/fato_vendas.sql:1-13`
 - **Critérios de aceite:**
-  - [ ] `incremental_strategy='merge'` (ou `delete+insert`) com janela de lookback configurável (`var('lookback_days', 30)`)
-  - [ ] Filtro por `ingested_at` em vez de `data_emissao`
-  - [ ] Teste: alterar o status de uma venda antiga e confirmar a propagação
+  - [x] `incremental_strategy='merge'` (ou `delete+insert`) com janela de lookback configurável (`var('lookback_days', 30)`)
+  - [x] Filtro por `ingested_at` em vez de `data_emissao`
+  - [x] Teste: alterar o status de uma venda antiga e confirmar a propagação
 
 ### ARQ-04 · Concentrar regras de negócio no dbt
 `modelagem` · 🟢 Baixa · `P`

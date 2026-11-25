@@ -89,7 +89,7 @@ Star schema no schema `gold`:
 
 | Tabela | Grão | Destaques |
 |---|---|---|
-| `fato_vendas` | 1 linha por venda | medidas (`qtd_caixas`, `receita_liquida`, `custo_total`, `margem_bruta`), status e tipo do lançamento, flags `entra_receita`/`entra_volume`; incremental por `id_venda` |
+| `fato_vendas` | 1 linha por venda | medidas (`qtd_caixas`, `receita_liquida`, `custo_total`, `margem_bruta`), status e tipo do lançamento, flags `entra_receita`/`entra_volume`; incremental por mudança (`merge` por `id_venda`) |
 | `dim_cliente` | 1 por cliente | SCD1; canal ausente → `Não informado` |
 | `dim_produto` | 1 por produto | família, marca, embalagem, preço e custo |
 | `dim_representante` | 1 por (representante, canal) | derivada das vendas |
@@ -202,6 +202,20 @@ docker compose exec airflow-scheduler airflow dags backfill dag_etl_pipeline \
 
 # Uma tarefa avulsa, fora do Airflow, para uma data
 python -m pipeline.silver.clean_vendas 2026-11-20
+```
+
+### Incremental da `fato_vendas` e lookback
+
+A fato é incremental por **mudança**, não por data. Uma venda é reprocessada (`merge` por `id_venda`) quando:
+
+1. a venda **ou o lançamento financeiro dela** mudou depois da última carga (`atualizado_em`, que vem do `_changed_at` da Silver). Isso cobre vendas retroativas, correções e a mudança de status de uma venda antiga;
+2. ela foi emitida nos últimos `lookback_days` dias (variável do dbt, padrão **30**). Isso cobre mudanças nas **dimensões** (como o custo de um produto), que não alteram a venda e por isso não aparecem em `atualizado_em`.
+
+```bash
+# janela maior (ex.: depois de corrigir o custo de um produto com vendas antigas)
+dbt run --select fato_vendas --vars '{lookback_days: 365}'
+# recálculo completo; o `+` recria as views analíticas, que o full-refresh derruba em cascata
+dbt run --full-refresh --select fato_vendas+
 ```
 
 ### Quarentena e auditoria
@@ -317,7 +331,7 @@ Limitações assumidas conscientemente, com o card correspondente no [BACKLOG](B
 | O merge da Silver nunca apaga: linha que some da origem permanece | Cadastro removido na fonte continua na Silver; CNPJ duplicado entre datas não é detectado | backlog |
 | A troca da escrita atômica no S3 não é instantânea (o S3 não tem `rename`) | Janela de poucos segundos, com recuperação automática na próxima escrita | — |
 | Colunas novas na Silver exigem atualizar `pipeline/ddl/load_stage.sql` (e o dbt) antes | A carga falha cedo, listando a diferença, em vez de aceitar um desvio de schema | — |
-| O incremental da fato filtra por `data_emissao` | Status financeiro atualizado depois não é reprocessado | MOD-01 |
+| Mudança em uma **dimensão** (ex.: custo de um produto) só chega às vendas emitidas dentro de `lookback_days` (30) | Vendas mais antigas ficam com o valor antigo até `--full-refresh` ou `--vars '{lookback_days: N}'` | — |
 | Execuções simultâneas da DAG | Continua em `max_active_runs=1`; a escrita atômica protege a Silver de falhas, não de concorrência | — |
 | As metas são fictícias e os dados são sintéticos, com tipos de lançamento uniformes | Números ilustrativos, não comerciais | — |
 | Clima de uma única coordenada (Uberlândia) para 4 mesorregiões | Correlação clima × vendas aproximada | backlog |

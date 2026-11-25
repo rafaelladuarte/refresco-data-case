@@ -7,7 +7,9 @@ mudança nunca cai na quarentena por engano:
 
   1. status de uma venda antiga e paga muda para CANCELADO (financeiro.csv);
   2. uma venda nova com data retroativa (vendas.csv): `data_emissao` anterior ao máximo já carregado;
-  3. um cliente tem o nome alterado (clientes.csv, ISO-8859-1).
+  3. um cliente tem o nome alterado (clientes.csv, ISO-8859-1);
+  4. o custo do produto P001 muda (produtos.csv): é uma mudança de DIMENSÃO, que não altera nenhuma
+     venda e por isso só chega às vendas antigas da fato pela janela de lookback (MOD-01).
 """
 
 import csv
@@ -20,6 +22,8 @@ from sqlalchemy import create_engine, text
 
 from pipeline.common.config import postgres_url
 
+ID_PRODUTO_CUSTO = "P001"
+CUSTO_NOVO = "2.55"
 ID_VENDA_NOVA = "V900001"
 DATA_RETROATIVA = "2024-02-10"
 SUFIXO_NOME = " Ltda"
@@ -85,7 +89,18 @@ def main(origem: str, destino: str, saida: str) -> int:
     alvo[0]["nome_cliente"] = nome_novo
     gravar(destino_dir / "clientes.csv", "latin1", colunas, linhas)
 
+    # 4. custo do produto (dimensão)
+    colunas, linhas = ler(destino_dir / "produtos.csv", "utf-8")
+    alvo = [linha for linha in linhas if linha["id_produto"] == ID_PRODUTO_CUSTO]
+    assert len(alvo) == 1, f"produto {ID_PRODUTO_CUSTO} não encontrado no CSV"
+    custo_antigo = alvo[0]["custo_unitario"]
+    alvo[0]["custo_unitario"] = CUSTO_NOVO
+    gravar(destino_dir / "produtos.csv", "utf-8", colunas, linhas)
+
     mudancas = {
+        "id_produto_custo": ID_PRODUTO_CUSTO,
+        "custo_antigo": custo_antigo,
+        "custo_novo": CUSTO_NOVO,
         "id_venda_status": venda.id_venda,
         "status_antigo": status_antigo,
         "status_novo": "CANCELADO",
