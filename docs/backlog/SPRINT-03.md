@@ -181,6 +181,14 @@ Fase 6 – Validação          PR com a CI verde + DAG no ambiente real + backf
 - **`staging.py`:** aplica a DDL, e por tabela, numa transação: `TRUNCATE` + `COPY` (`psycopg2.copy_expert` a partir de um buffer CSV). Falha no meio faz rollback e preserva a carga anterior. Se as colunas da Silver divergirem da DDL, falha com mensagem clara (detecta desvio de schema cedo).
 - **DAG (D5-A):** `dbt_run_staging` incorporada à `dbt_run_gold` (`--select staging marts.gold`); teste da DAG atualizado para 13 tasks.
 - **Validação:** fingerprints de Silver e Gold idênticos ao baseline (a mudança de tipos não pode alterar valores). Uma segunda carga com as views `stg_*` existentes não as derruba.
+- **Resultado da execução:**
+  - **`pipeline/ddl/load_stage.sql`:** tipos explícitos para as 5 tabelas (`ano`/`mes` `integer`, `timestamp`, `boolean`, `double precision` nas medidas, que ficam como o pandas gravava: `numeric` mudaria a representação lida pelo dbt). As colunas de controle do ARQ-01 e ARQ-05 fazem parte do contrato.
+  - **`staging.py` reescrito:** lê e valida **tudo antes de abrir a transação**; depois, numa única transação para as cinco tabelas, aplica a DDL e faz `TRUNCATE` + `COPY` (CSV com `\N` para nulo, para texto vazio não virar `NULL`). Nunca derruba tabelas em execução normal.
+  - **Desvio de schema:** se as colunas da Silver diferem das da DDL, a carga falha antes de qualquer lock, listando o que falta e o que sobra.
+  - **Ambiente antigo:** tabelas criadas pelo pandas (colunas ou tipos diferentes da DDL) são recriadas uma única vez, com aviso; isso derruba as views `stg_*` dependentes naquela execução, e a `dbt_run_gold` as recria. Documentado no README.
+  - **DAG (D5-A):** `dbt_run_staging` removida; `dbt_run_gold` usa `--select staging marts.gold`. 13 tasks, com teste da DAG atualizado.
+  - **Provado no Postgres real:** (1) a primeira carga sobre tabelas do pandas as recria (5 avisos) e derruba uma view de teste; a segunda mantém a view e `ano` é `integer`; (2) com falha injetada no `COPY` do financeiro, depois de vendas já truncada e recarregada com 1 linha, o rollback devolveu 3.482 vendas e 2.454 lançamentos.
+  - **e2e:** novo `scripts/e2e_views_check.py` confirma, depois da carga do dia 2 e antes de qualquer `dbt`, que as 5 views existem e `stg_vendas` já mostra a venda nova. Saiu a exceção que ignorava as views `stg_*` na comparação de idempotência. 297 testes unitários.
 
 ### Fase 5: MOD-01 · Incremental da `fato_vendas`
 

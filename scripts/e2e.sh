@@ -161,6 +161,11 @@ if [[ "$DAY2" == "1" ]]; then
   "$PYTHON" scripts/e2e_mutate.py "$ROOT/data/raw" "$WORKDIR/data/raw" "$WORKDIR/mudancas.json"
   AIRFLOW_HOME="$WORKDIR" run_pipeline "$DS_DIA2"
 
+  # ARQ-03: o load_to_staging fez TRUNCATE + COPY, então as views stg_* do dia 1 continuam de pé e
+  # já enxergam os dados do dia 2, antes de qualquer dbt run.
+  log "Views stg_* depois da carga (sem dbt)"
+  "$PYTHON" scripts/e2e_views_check.py "$WORKDIR/mudancas.json"
+
   # MOD-01 pendente: o incremental perde a venda retroativa e o teste de reconciliação (MOD-02)
   # acusa. Tolera só essa falha, e só enquanto E2E_ENFORCE_PENDING != 1; qualquer outra reprova.
   log "dbt build (dia 2)"
@@ -185,19 +190,18 @@ PY
   log "Fingerprint do estado após o dia 2"
   "$PYTHON" scripts/fingerprint.py gerar "$WORKDIR/fingerprint_dia2.json"
 
-  # (o load_to_staging ainda derruba as views stg_* com DROP CASCADE; ignoradas até o ARQ-03)
   # Reexecuta o dia 2: mesma data lógica, mesmos dados -> nada pode mudar
   log "Reexecução do dia 2 (idempotência)"
   AIRFLOW_HOME="$WORKDIR" run_pipeline "$DS_DIA2"
   "$PYTHON" scripts/fingerprint.py gerar "$WORKDIR/fingerprint_reexec.json"
-  "$PYTHON" scripts/fingerprint.py comparar "$WORKDIR/fingerprint_dia2.json" "$WORKDIR/fingerprint_reexec.json" --ignorar load_stage.stg_
+  "$PYTHON" scripts/fingerprint.py comparar "$WORKDIR/fingerprint_dia2.json" "$WORKDIR/fingerprint_reexec.json"
 
   # Reexecuta o dia 1 DEPOIS do dia 2 (backfill fora de ordem): a data lógica mais antiga não pode
   # desfazer as mudanças do dia 2 na Silver. Compara só a Silver: o dbt não rodou de novo.
   log "Backfill fora de ordem: dia 1 depois do dia 2"
   run_pipeline "$DS_DIA1"
   "$PYTHON" scripts/fingerprint.py gerar "$WORKDIR/fingerprint_backfill.json"
-  "$PYTHON" scripts/fingerprint.py comparar "$WORKDIR/fingerprint_dia2.json" "$WORKDIR/fingerprint_backfill.json" --ignorar load_stage.stg_
+  "$PYTHON" scripts/fingerprint.py comparar "$WORKDIR/fingerprint_dia2.json" "$WORKDIR/fingerprint_backfill.json"
 fi
 
 if [[ "$DAG_TEST" == "1" ]]; then

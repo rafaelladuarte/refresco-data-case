@@ -65,11 +65,11 @@ ingest_clima ──► clean_clima ───────────────
                                                      ▼
                                             load_to_staging
                                                      │
- dbt_deps ► dbt_seed ► dbt_run_staging ► dbt_run_gold ► dbt_test_gold ► dbt_run_analytics
+ dbt_deps ► dbt_seed ► dbt_run_gold ► dbt_test_gold ► dbt_run_analytics
 ```
 
 - `clean_vendas` depende de clientes e produtos porque faz a validação referencial contra os cadastros já limpos.
-- `dbt_run_staging` roda a cada execução porque o `DROP TABLE ... CASCADE` da carga remove as views `stg_*` (melhoria prevista no card ARQ-03).
+- `load_to_staging` faz `TRUNCATE` + `COPY` de todas as tabelas de `load_stage` numa única transação, com tipos definidos em `pipeline/ddl/load_stage.sql`. As tabelas nunca são derrubadas, então as views `stg_*` sobrevivem à carga; a `dbt_run_gold` as recria (`--select staging marts.gold`) apenas para acompanhar mudanças nos modelos.
 - `dbt_test_gold` bloqueia as views analíticas se algum teste com severidade `error` falhar.
 
 ## 4. Modelo dimensional (schema `gold`)

@@ -130,17 +130,16 @@ with DAG(
     #   0. dbt_deps / dbt_seed: instala pacotes e carrega os seeds de regras de
     #      negócio (regra_tipo_lancamento) e metas (metas_canal_mes) no schema gold.
     #
-    #   1. dbt_run_staging: recria as views stg_* no schema load_stage.
-    #      Necessário a cada execução porque load_to_staging faz
-    #      DROP TABLE ... CASCADE nas tabelas de load_stage, o que remove as views
-    #      dependentes. (Não tem relação com o container dbt ser efêmero: as views
-    #      ficam no PostgreSQL.) Trocar por TRUNCATE + COPY está no card ARQ-03.
+    #   1. dbt_run_gold: recria as views stg_* (load_stage) e materializa dim_* e
+    #      fato_vendas no schema gold. As views stg_* não precisam mais de uma task
+    #      própria: load_to_staging faz TRUNCATE + COPY, as tabelas de load_stage
+    #      nunca são derrubadas e as views sobrevivem à carga (ARQ-03). Elas entram
+    #      na seleção só para acompanhar mudanças nos modelos (create or replace é
+    #      barato e idempotente).
     #
-    #   2. dbt_run_gold: materializa dim_* e fato_vendas no schema gold.
+    #   2. dbt_test_gold: testes da Gold (integridade, regras, cobertura de clima).
     #
-    #   3. dbt_test_gold: testes da Gold (integridade, regras, cobertura de clima).
-    #
-    #   4. dbt_run_analytics: views analíticas vw_q1..vw_q4 consumidas pelo Streamlit.
+    #   3. dbt_run_analytics: views analíticas vw_q1..vw_q4 consumidas pelo Streamlit.
     #
     # network_mode conecta o container à uberlandia-net para resolução DNS
     # de 'postgres-gold' conforme configurado no profiles.yml.
@@ -182,23 +181,15 @@ with DAG(
         **_dbt_common,
     )
 
-    # Passo 1 — recria as views stg_* no schema load_stage
-    dbt_run_staging = DockerOperator(
-        task_id="dbt_run_staging",
-        command="run --profiles-dir /usr/app/dbt --select staging",
-        execution_timeout=timedelta(minutes=15),
-        **_dbt_common,
-    )
-
-    # Passo 2 — materializa as tabelas/incrementais da camada gold
+    # Passo 1 — views stg_* (load_stage) e tabelas/incrementais da camada gold
     dbt_run_gold = DockerOperator(
         task_id="dbt_run_gold",
-        command="run --profiles-dir /usr/app/dbt --select marts.gold",
+        command="run --profiles-dir /usr/app/dbt --select staging marts.gold",
         execution_timeout=timedelta(minutes=30),
         **_dbt_common,
     )
 
-    # Passo 3 — testa integridade referencial e accepted_values do schema gold
+    # Passo 2 — testa integridade referencial e accepted_values do schema gold
     dbt_test_gold = DockerOperator(
         task_id="dbt_test_gold",
         command="test --profiles-dir /usr/app/dbt --select marts.gold",
@@ -206,7 +197,7 @@ with DAG(
         **_dbt_common,
     )
 
-    # Passo 4 — executa todas as views do schema gold
+    # Passo 3 — executa todas as views do schema gold
     dbt_run_analytics = DockerOperator(
         task_id="dbt_run_analytics",
         command="run --profiles-dir /usr/app/dbt --select marts.analytics",
@@ -224,7 +215,7 @@ with DAG(
     #                                                       ▼
     #                                              load_to_staging
     #                                                       │
-    #   dbt_deps ► dbt_seed ► dbt_run_staging ► dbt_run_gold ► dbt_test_gold ► dbt_run_analytics
+    #   dbt_deps ► dbt_seed ► dbt_run_gold ► dbt_test_gold ► dbt_run_analytics
     # =========================================================================
 
     # Cadastros independentes disparam em paralelo após CSV Bronze
@@ -243,13 +234,5 @@ with DAG(
         clean_clima_task,
     ] >> task_load_to_staging
 
-    # dbt: deps → seed → staging → gold → test → analytics
-    (
-        task_load_to_staging
-        >> dbt_deps
-        >> dbt_seed
-        >> dbt_run_staging
-        >> dbt_run_gold
-        >> dbt_test_gold
-        >> dbt_run_analytics
-    )
+    # dbt: deps → seed → staging + gold → test → analytics
+    (task_load_to_staging >> dbt_deps >> dbt_seed >> dbt_run_gold >> dbt_test_gold >> dbt_run_analytics)

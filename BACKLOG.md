@@ -129,9 +129,9 @@ O padrão `fs.rm()` seguido de `to_parquet()` deixa a Silver vazia ou parcial se
 
 - **Arquivos:** `pipeline/load/staging.py:59-64`
 - **Critérios de aceite:**
-  - [ ] DDL versionada para as tabelas de `load_stage`
-  - [ ] Carga com `TRUNCATE` + `COPY` numa transação
-  - [ ] Views `stg_*` sobrevivem à carga (`dbt_run_staging` deixa de ser obrigatório a cada execução)
+  - [x] DDL versionada para as tabelas de `load_stage`
+  - [x] Carga com `TRUNCATE` + `COPY` numa transação
+  - [x] Views `stg_*` sobrevivem à carga (`dbt_run_staging` deixa de ser obrigatório a cada execução)
 
 ### MOD-01 · Corrigir o incremental da `fato_vendas`
 `modelagem` · 🔴 Alta · `M`

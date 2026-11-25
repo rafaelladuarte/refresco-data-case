@@ -27,7 +27,7 @@ Pipeline de dados **Bronze → Silver → Gold** que transforma arquivos de vend
 
 Capturas da validação final da Sprint 1, em um ambiente recriado do zero (`docker compose down -v`).
 
-**Airflow: DAG `dag_etl_pipeline` com as 14 tasks concluídas.** Bronze e Silver rodam com `PythonOperator`; o dbt roda em containers efêmeros via `DockerOperator`.
+**Airflow: DAG `dag_etl_pipeline` com as 14 tasks concluídas (captura da Sprint 1; desde a Sprint 3 são 13, sem `dbt_run_staging`).** Bronze e Silver rodam com `PythonOperator`; o dbt roda em containers efêmeros via `DockerOperator`.
 
 ![DAG no Airflow: grafo de tasks](docs/images/airflow_dag_graph.png)
 
@@ -183,6 +183,8 @@ docker compose up -d --build
 > **Atualizando um ambiente da Sprint 2 (partições Bronze por data).** A partir do ARQ-01 a Bronze é particionada pela data lógica da execução (`ingestion_date=YYYY-MM-DD`), e a Silver processa só a partição da data. As partições antigas, com horário (`ingestion_date=2026-11-25T12:17:55`), são **ignoradas** com um warning. Para removê-las uma única vez (lista primeiro, e só apaga com `--apply`):
 > `python scripts/cleanup_legacy_bronze.py` e depois `python scripts/cleanup_legacy_bronze.py --apply` (com as variáveis do `.env` exportadas), ou `docker compose down -v` num ambiente de teste. A Silver gravada antes desta mudança é aceita: as colunas de controle são completadas no primeiro merge.
 
+> **Atualizando um ambiente da Sprint 2 (tabelas de `load_stage`).** A carga agora usa tipos explícitos (`pipeline/ddl/load_stage.sql`) e `TRUNCATE` + `COPY`. Na **primeira** execução depois da atualização, as tabelas de `load_stage` criadas pelo pandas (colunas e tipos diferentes da DDL, como `ano` em `text`) são recriadas, com um aviso, e as views `stg_*` dependentes caem; a `dbt_run_gold` as recria na mesma execução. Daí em diante as views sobrevivem às cargas.
+
 > **Atualizando um ambiente antigo.** Se você já tinha o ambiente rodando antes da Sprint 1, as credenciais e o volume do MinIO mudaram. Recrie os volumes com `docker compose down -v`. Isso apaga os dados locais, que se recriam rodando a DAG. Se preferir manter os volumes, a `fato_vendas` (incremental) ganhou colunas e precisa de um `dbt run --full-refresh --select fato_vendas+`.
 
 ### Reprocessamento e backfill
@@ -233,7 +235,7 @@ ruff check . && ruff format --check .           # lint e formato (configuração
 ```
 
 - `tests/unit/`: funções puras (validação de vendas, dedup de clientes, datas, mapeamentos do financeiro, normalizações, configuração, storage e ingestão de clima com respostas HTTP simuladas). Não precisam de MinIO, Postgres nem rede.
-- `tests/integration/test_dag.py`: integridade da DAG (importação, 14 tasks, dependências, `max_active_runs=1`). Precisa do Airflow, então é pulado no virtualenv. Dentro da imagem:
+- `tests/integration/test_dag.py`: integridade da DAG (importação, 13 tasks, dependências, `max_active_runs=1`). Precisa do Airflow, então é pulado no virtualenv. Dentro da imagem:
 
 ```bash
 docker run --rm --entrypoint bash -v "$PWD:/opt/airflow/repo:ro" -w /opt/airflow/repo refresco-data-case-airflow-init \
@@ -314,7 +316,7 @@ Limitações assumidas conscientemente, com o card correspondente no [BACKLOG](B
 |---|---|---|
 | O merge da Silver nunca apaga: linha que some da origem permanece | Cadastro removido na fonte continua na Silver; CNPJ duplicado entre datas não é detectado | backlog |
 | A troca da escrita atômica no S3 não é instantânea (o S3 não tem `rename`) | Janela de poucos segundos, com recuperação automática na próxima escrita | — |
-| A carga usa `DROP TABLE ... CASCADE` e tipos inferidos pelo pandas | Força recriar as views `stg_*` a cada execução | ARQ-03 |
+| Colunas novas na Silver exigem atualizar `pipeline/ddl/load_stage.sql` (e o dbt) antes | A carga falha cedo, listando a diferença, em vez de aceitar um desvio de schema | — |
 | O incremental da fato filtra por `data_emissao` | Status financeiro atualizado depois não é reprocessado | MOD-01 |
 | Execuções simultâneas da DAG | Continua em `max_active_runs=1`; a escrita atômica protege a Silver de falhas, não de concorrência | — |
 | As metas são fictícias e os dados são sintéticos, com tipos de lançamento uniformes | Números ilustrativos, não comerciais | — |
