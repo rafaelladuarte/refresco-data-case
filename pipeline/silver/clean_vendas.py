@@ -1,10 +1,16 @@
+import sys
+
 import pandas as pd
 
+from pipeline.common.audit import record_dq
 from pipeline.common.logging import get_logger
+from pipeline.common.logical_date import resolve_ds
+from pipeline.common.merge import merge_state
 from pipeline.common.storage import (
     get_s3_client,
     read_bronze,
     read_silver,
+    read_silver_state,
     write_quarantine,
     write_silver,
 )
@@ -16,6 +22,8 @@ from pipeline.common.validators import (
 )
 
 logger = get_logger(__name__)
+
+SILVER_PATH = "s3://silver/vendas/"
 
 # Formatos de data aceitos em data_emissao. São mutuamente exclusivos (uma string
 # casa com no máximo um), então a ordem não altera o resultado.
@@ -108,8 +116,9 @@ def validate_vendas(
     return df_ok, df_quarentena
 
 
-def main():
-    logger.info("Iniciando processamento Silver para Vendas")
+def main(ds: str | None = None, run_id: str | None = None):
+    ds = resolve_ds(ds)
+    logger.info(f"Iniciando processamento Silver para Vendas (partição {ds})")
 
     try:
         fs = get_s3_client()
@@ -117,10 +126,11 @@ def main():
         # ------------------------------------------------------------------
         # 1. Lê vendas da Bronze
         # ------------------------------------------------------------------
-        df = read_bronze(fs, "vendas")
+        df = read_bronze(fs, "vendas", ds)
         if df is None:
-            return
-        logger.info(f"Linhas lidas da Bronze: {len(df)}")
+            raise FileNotFoundError(f"Partição Bronze de vendas não encontrada para {ds}")
+        lidas = len(df)
+        logger.info(f"Linhas lidas da Bronze: {lidas}")
 
         # ------------------------------------------------------------------
         # 2. Normalização de strings antes de qualquer validação
@@ -142,8 +152,8 @@ def main():
         for col in ["qtd_caixas", "preco_unitario", "desconto_pct"]:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
-        receita_bruta = df["qtd_caixas"] * df["preco_unitario"]
-        df["receita_liquida"] = receita_bruta * (1 - df["desconto_pct"].fillna(0))
+        # A Silver só limpa, tipa e valida. `receita_liquida` e as demais métricas são calculadas no dbt
+        # (stg_vendas), para a regra de negócio morar em um único lugar (ARQ-04).
 
         df["_ingested_at"] = pd.to_datetime(df["_ingested_at"], errors="coerce")
         # Ordenação estável: em empate de _ingested_at o resultado é determinístico
@@ -184,14 +194,17 @@ def main():
 
         # Persiste a quarentena para auditoria e reprocessamento manual. A da execução
         # anterior é removida mesmo que a atual venha vazia.
-        quarentena_path = write_quarantine(fs, df_quarentena, "vendas")
+        quarentena_path = write_quarantine(fs, df_quarentena, "vendas", ds)
         if not df_quarentena.empty:
             logger.warning(f"[QUARENTENA] {len(df_quarentena)} registros salvos em {quarentena_path}")
 
         # ------------------------------------------------------------------
         # 6. Salva apenas registros íntegros na Silver
         # ------------------------------------------------------------------
-        write_silver(fs, df_ok, "s3://silver/vendas/", partition_cols=["ano", "mes"])
+        aprovadas = len(df_ok)
+        df_ok = merge_state(read_silver_state(fs, SILVER_PATH), df_ok, key=["id_venda"])
+        write_silver(fs, df_ok, SILVER_PATH, partition_cols=["ano", "mes"])
+        record_dq("vendas", ds, run_id, lidas, aprovadas, df_quarentena)
         logger.info("[OK] Tabela de Vendas processada e salva com sucesso na Silver!")
 
     except Exception as e:
@@ -200,4 +213,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(*sys.argv[1:3])

@@ -108,10 +108,10 @@ _Achado na Sprint 1._ O container dbt roda como root, então `dbt/logs`, `dbt/ta
 Hoje cada execução grava uma partição com `datetime.now()` e a Silver relê `bronze/**` inteira: o custo cresce sem limite e não há backfill.
 
 - **Critérios de aceite:**
-  - [ ] Partição Bronze baseada em `{{ ds }}` / `logical_date`
-  - [ ] Reexecutar o mesmo dia sobrescreve a mesma partição (idempotente)
-  - [ ] Silver processa apenas as partições novas e faz merge com o estado atual
-  - [ ] Backfill de um período testado e documentado
+  - [x] Partição Bronze baseada em `{{ ds }}` / `logical_date`
+  - [x] Reexecutar o mesmo dia sobrescreve a mesma partição (idempotente)
+  - [x] Silver processa apenas as partições novas e faz merge com o estado atual
+  - [x] Backfill de um período testado e documentado _(e2e com duas datas, inclusive fora de ordem; o `airflow dags backfill` no ambiente real fica para a validação final da sprint)_
 
 ### ARQ-02 · Escrita atômica na Silver
 `eng-software` · 🟠 Média · `M`
@@ -119,8 +119,8 @@ Hoje cada execução grava uma partição com `datetime.now()` e a Silver relê 
 O padrão `fs.rm()` seguido de `to_parquet()` deixa a Silver vazia ou parcial se a escrita falhar.
 
 - **Critérios de aceite:**
-  - [ ] Escrita em prefixo temporário (`_tmp/<run_id>/`) e troca no final
-  - [ ] Falha no meio da escrita preserva a versão anterior
+  - [x] Escrita em prefixo temporário (`_tmp/<run_id>/`) e troca no final
+  - [x] Falha no meio da escrita preserva a versão anterior
 
 ### ARQ-03 · Carga em `load_stage` com DDL explícita e `COPY`
 `eng-software` · 🟠 Média · `M`
@@ -129,9 +129,9 @@ O padrão `fs.rm()` seguido de `to_parquet()` deixa a Silver vazia ou parcial se
 
 - **Arquivos:** `pipeline/load/staging.py:59-64`
 - **Critérios de aceite:**
-  - [ ] DDL versionada para as tabelas de `load_stage`
-  - [ ] Carga com `TRUNCATE` + `COPY` numa transação
-  - [ ] Views `stg_*` sobrevivem à carga (`dbt_run_staging` deixa de ser obrigatório a cada execução)
+  - [x] DDL versionada para as tabelas de `load_stage`
+  - [x] Carga com `TRUNCATE` + `COPY` numa transação
+  - [x] Views `stg_*` sobrevivem à carga (`dbt_run_staging` deixa de ser obrigatório a cada execução)
 
 ### MOD-01 · Corrigir o incremental da `fato_vendas`
 `modelagem` · 🔴 Alta · `M`
@@ -140,9 +140,9 @@ O filtro `data_emissao > max(data_emissao)` perde vendas retroativas e atualiza�
 
 - **Arquivos:** `dbt/models/marts/gold/fato_vendas.sql:1-13`
 - **Critérios de aceite:**
-  - [ ] `incremental_strategy='merge'` (ou `delete+insert`) com janela de lookback configurável (`var('lookback_days', 30)`)
-  - [ ] Filtro por `ingested_at` em vez de `data_emissao`
-  - [ ] Teste: alterar o status de uma venda antiga e confirmar a propagação
+  - [x] `incremental_strategy='merge'` (ou `delete+insert`) com janela de lookback configurável (`var('lookback_days', 30)`)
+  - [x] Filtro por `ingested_at` em vez de `data_emissao`
+  - [x] Teste: alterar o status de uma venda antiga e confirmar a propagação
 
 ### ARQ-04 · Concentrar regras de negócio no dbt
 `modelagem` · 🟢 Baixa · `P`
@@ -150,8 +150,8 @@ O filtro `data_emissao > max(data_emissao)` perde vendas retroativas e atualiza�
 `receita_liquida` é calculada no pandas e `margem_bruta` no dbt.
 
 - **Critérios de aceite:**
-  - [ ] Silver só limpa e tipa; todas as métricas são calculadas no dbt
-  - [ ] Fórmulas documentadas no `schema.yml`
+  - [x] Silver só limpa e tipa; todas as métricas são calculadas no dbt
+  - [x] Fórmulas documentadas no `schema.yml`
 
 ### ARQ-05 · Quarentena genérica e tabela de auditoria
 `qualidade-dados` · 🟠 Média · `M`
@@ -159,9 +159,9 @@ O filtro `data_emissao > max(data_emissao)` perde vendas retroativas e atualiza�
 Hoje só `vendas` grava quarentena; clientes e produtos só fazem log.
 
 - **Critérios de aceite:**
-  - [ ] Quarentena para todas as entidades em `silver/_quarentena/<entidade>/<data>/`
-  - [ ] Tabela `audit.dq_results` (run_id, entidade, lidas, aprovadas, rejeitadas, motivo, timestamp)
-  - [ ] Cada task Silver grava sua linha de auditoria
+  - [x] Quarentena para todas as entidades em `silver/_quarentena/<entidade>/<data>/`
+  - [x] Tabela `audit.dq_results` (run_id, entidade, lidas, aprovadas, rejeitadas, motivo, timestamp)
+  - [x] Cada task Silver grava sua linha de auditoria
 
 ---
 

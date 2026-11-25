@@ -15,7 +15,12 @@ renamed as (
         -- datas
         cast(competencia as timestamp) as data_competencia,
         cast(ano as integer) as ano_competencia,
-        cast(mes as integer) as mes_competencia
+        cast(mes as integer) as mes_competencia,
+
+        -- metadados; changed_at só avança quando o lançamento muda (ex.: status), e é o que faz
+        -- uma mudança de status de uma venda antiga chegar à fato
+        cast(_ingested_at as timestamp) as ingested_at,
+        cast(_changed_at as timestamp) as changed_at
 
     from source
 )

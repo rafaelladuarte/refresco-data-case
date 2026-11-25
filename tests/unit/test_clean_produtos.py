@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from pipeline.silver.clean_produtos import flag_valores_indisponiveis
+from pipeline.silver.clean_produtos import flag_valores_indisponiveis, validate_produtos
 
 
 def produtos(custos, precos=None):
@@ -56,3 +56,28 @@ class TestFlagValoresIndisponiveis:
         df = flag_valores_indisponiveis(produtos([]))
         assert df.empty
         assert {"custo_disponivel", "preco_disponivel"} <= set(df.columns)
+
+
+class TestValidateProdutos:
+    def test_id_valido_passa_e_invalido_vai_para_a_quarentena_com_motivo(self):
+        df = pd.DataFrame({"id_produto": ["P001", "PXXX", "", "P12", "P019"], "nome_produto": list("abcde")})
+
+        ok, quarentena = validate_produtos(df)
+
+        assert ok["id_produto"].tolist() == ["P001", "P019"]
+        assert sorted(quarentena["id_produto"].tolist()) == ["", "P12", "PXXX"]
+        assert quarentena["motivo_rejeicao"].str.startswith("id_produto inválido ou vazio: '").all()
+        assert quarentena.loc[quarentena["id_produto"] == "PXXX", "motivo_rejeicao"].iloc[0] == (
+            "id_produto inválido ou vazio: 'PXXX'"
+        )
+
+    def test_todos_validos_gera_quarentena_vazia_com_a_coluna_de_motivo(self):
+        ok, quarentena = validate_produtos(pd.DataFrame({"id_produto": ["P001", "P002"]}))
+        assert len(ok) == 2
+        assert quarentena.empty
+        assert "motivo_rejeicao" in quarentena.columns
+
+    def test_preserva_as_demais_colunas_na_quarentena(self):
+        df = pd.DataFrame({"id_produto": ["P01"], "nome_produto": ["Suco"]})
+        _, quarentena = validate_produtos(df)
+        assert quarentena["nome_produto"].tolist() == ["Suco"]

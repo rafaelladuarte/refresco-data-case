@@ -52,6 +52,12 @@ models:
         description: "Desconto em fração (0 a 1, exclusivo em 1)."
         data_tests:
           - not_null
+      - name: receita_liquida
+        description: "Receita da venda: `qtd_caixas * preco_unitario * (1 - desconto_pct)`, arredondada em 2 casas. Única definição da métrica; a Silver não a calcula mais."
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
 
   - name: stg_produtos
     description: "Modelo staging com dados limpos e tipados da tabela de produtos."

@@ -1,0 +1,447 @@
+{
+  "gold.dim_cliente": {
+    "colunas": [
+      "ativo",
+      "canal",
+      "cidade",
+      "cnpj",
+      "id_cliente",
+      "nome_cliente",
+      "regiao",
+      "representante",
+      "sk_cliente",
+      "uf"
+    ],
+    "linhas": 115,
+    "sha256": "4192a901bbbf94fe76c9b871eec3b90a338729c924e89d4350228e445b12feb9"
+  },
+  "gold.dim_produto": {
+    "colunas": [
+      "custo_disponivel",
+      "custo_unitario",
+      "embalagem",
+      "familia",
+      "id_produto",
+      "marca",
+      "nome_produto",
+      "preco_disponivel",
+      "preco_tabela",
+      "sk_produto",
+      "volume_ml"
+    ],
+    "linhas": 25,
+    "sha256": "a31e6e12fc38fb1bf26b26f0185130cc757a82d68c616e854c548099cef1ad32"
+  },
+  "gold.dim_representante": {
+    "colunas": [
+      "canal_venda",
+      "nome_representante",
+      "sk_representante"
+    ],
+    "linhas": 30,
+    "sha256": "a6a08ba11e699412815834b1ad43b414a40e5486d81045389b906efba45e0b15"
+  },
+  "gold.dim_tempo": {
+    "colunas": [
+      "ano",
+      "clima_precipitacao",
+      "clima_precipitacao_total_mes",
+      "clima_temp_max",
+      "clima_temp_max_media_mes",
+      "data_completa",
+      "dia",
+      "dia_semana",
+      "is_dia_util",
+      "mes",
+      "nome_mes",
+      "sk_tempo",
+      "trimestre"
+    ],
+    "linhas": 4018,
+    "sha256": "9dbb5cef0bfefc2de4553208a05c8e8b09a55da2cda6963da418e2f07ad448c5"
+  },
+  "gold.fato_vendas": {
+    "colunas": [
+      "custo_total",
+      "data_emissao",
+      "desconto_pct",
+      "entra_receita",
+      "entra_volume",
+      "id_venda",
+      "margem_bruta",
+      "preco_unitario",
+      "qtd_caixas",
+      "receita_liquida",
+      "sk_cliente",
+      "sk_produto",
+      "sk_representante",
+      "sk_tempo",
+      "sk_venda",
+      "source_file",
+      "status_financeiro",
+      "tipo_lancamento"
+    ],
+    "linhas": 3482,
+    "sha256": "1b63365a88a272766b963ff98bf892c9bcb79b2bb12696c2003664ba8edcd6fb"
+  },
+  "gold.metas_canal_mes": {
+    "colunas": [
+      "ano",
+      "canal",
+      "mes",
+      "meta_volume_caixas"
+    ],
+    "linhas": 60,
+    "sha256": "48a02b7b43d1f275f64c862e64d5b643c25c6541b7ca4fea1fc2e185a5603904"
+  },
+  "gold.regra_tipo_lancamento": {
+    "colunas": [
+      "descricao",
+      "entra_receita",
+      "entra_volume",
+      "tipo_lancamento"
+    ],
+    "linhas": 5,
+    "sha256": "1cc512d282f8ae8d711d4d11c33a67b3b5e255ba1429ff79eaf51b7ee16965ec"
+  },
+  "gold.vw_q1_ranking_vendas": {
+    "colunas": [
+      "familia",
+      "nome_produto",
+      "ranking",
+      "regiao",
+      "sk_produto",
+      "total_caixas",
+      "total_receita_liquida",
+      "total_vendas"
+    ],
+    "linhas": 40,
+    "sha256": "1abb27ce5c152f43774d6b495a7864e5cc7294da898e167f9eee9daa1698f081"
+  },
+  "gold.vw_q2_volume_vs_meta": {
+    "colunas": [
+      "canal",
+      "meta_volume_caixas",
+      "percentual_atingimento",
+      "receita_realizada",
+      "total_vendas_realizadas",
+      "volume_realizado_caixas"
+    ],
+    "linhas": 6,
+    "sha256": "5ac3068ad43bec2d5468af900007f821646a238a097c162cb9d1745bd63255b7"
+  },
+  "gold.vw_q3_tendencia_volume": {
+    "colunas": [
+      "data_completa",
+      "media_movel_7dias",
+      "nome_produto",
+      "sk_produto",
+      "volume_dia_anterior",
+      "volume_diario_caixas"
+    ],
+    "linhas": 428,
+    "sha256": "d644bb3a0f416467741dda0ee1ff09873d86dd12ef7bb2ee11cbdc0626e49dff"
+  },
+  "gold.vw_q4_margem_bruta": {
+    "colunas": [
+      "custo_disponivel",
+      "custo_total",
+      "margem_bruta",
+      "margem_bruta_percentual",
+      "nome_produto",
+      "receita_liquida_total",
+      "sk_produto"
+    ],
+    "linhas": 25,
+    "sha256": "652641e268526266faad8f0e52e4560af7786d47351ff7412fa6d2ae8b7ffef8"
+  },
+  "load_stage.clientes": {
+    "colunas": [
+      "_source_file",
+      "ativo",
+      "canal",
+      "cidade",
+      "cnpj",
+      "id_cliente",
+      "nome_cliente",
+      "regiao",
+      "representante",
+      "uf"
+    ],
+    "linhas": 115,
+    "sha256": "11093919c3ce0a107327688db87d1dc6ef183779de2b1a3a560eb7a7d500235f"
+  },
+  "load_stage.clima": {
+    "colunas": [
+      "_api_source",
+      "ano",
+      "mes",
+      "precipitation_sum",
+      "temperature_2m_max",
+      "time"
+    ],
+    "linhas": 2192,
+    "sha256": "c5e09ea3d6853654d1e38de8a5e574fa5c4f7e006e72cd48789be035ddbfa12f"
+  },
+  "load_stage.financeiro": {
+    "colunas": [
+      "ano",
+      "competencia",
+      "id_financeiro",
+      "id_venda",
+      "mes",
+      "status_padrao",
+      "tipo_lancamento_padrao"
+    ],
+    "linhas": 2454,
+    "sha256": "874c23172bfdd2854fc11984f8599c434f108ec82571691a86e7a602a227a4b6"
+  },
+  "load_stage.produtos": {
+    "colunas": [
+      "_source_file",
+      "custo_disponivel",
+      "custo_unitario",
+      "embalagem",
+      "familia",
+      "id_produto",
+      "marca",
+      "nome_produto",
+      "preco_disponivel",
+      "preco_tabela",
+      "volume_ml"
+    ],
+    "linhas": 25,
+    "sha256": "221c9ee9d0659f5d3c891f4289afba11ed65c3dfb2980c8cfcb8b40e1da63f86"
+  },
+  "load_stage.stg_clientes": {
+    "colunas": [
+      "canal",
+      "cidade",
+      "cnpj",
+      "id_cliente",
+      "is_ativo",
+      "nome_cliente",
+      "nome_representante",
+      "regiao",
+      "source_file",
+      "uf"
+    ],
+    "linhas": 115,
+    "sha256": "f9bfcc078d24999bf96560939e409bb5b568b74d64bac3b2afe098949d697454"
+  },
+  "load_stage.stg_clima": {
+    "colunas": [
+      "ano_clima",
+      "api_source",
+      "data_clima",
+      "mes_clima",
+      "precipitacao_total",
+      "temperatura_maxima"
+    ],
+    "linhas": 2192,
+    "sha256": "987c5a7ec89beb06fcdcf7057537f6bdf343d1982644869b4d67ab7757772cc3"
+  },
+  "load_stage.stg_financeiro": {
+    "colunas": [
+      "ano_competencia",
+      "data_competencia",
+      "id_financeiro",
+      "id_venda",
+      "mes_competencia",
+      "status_financeiro",
+      "tipo_lancamento"
+    ],
+    "linhas": 2454,
+    "sha256": "23d75463a72c43312c9431f65c9b86af21654aeb9d216fe748f6a58f18086f3d"
+  },
+  "load_stage.stg_produtos": {
+    "colunas": [
+      "custo_disponivel",
+      "custo_unitario",
+      "embalagem",
+      "familia",
+      "id_produto",
+      "marca",
+      "nome_produto",
+      "preco_disponivel",
+      "preco_tabela",
+      "source_file",
+      "volume_ml"
+    ],
+    "linhas": 25,
+    "sha256": "1a22d7d5e27f96c7095a0b68f8a46efcde698bb66e5f2c662eb438de45615d60"
+  },
+  "load_stage.stg_vendas": {
+    "colunas": [
+      "ano_venda",
+      "canal_venda",
+      "data_emissao",
+      "desconto_pct",
+      "id_cliente",
+      "id_produto",
+      "id_venda",
+      "mes_venda",
+      "nome_representante",
+      "preco_unitario",
+      "qtd_caixas",
+      "receita_liquida",
+      "source_file"
+    ],
+    "linhas": 3482,
+    "sha256": "595364610c251e46fa452e867e758d3b64b00417347ddea34d28279258239f51"
+  },
+  "load_stage.vendas": {
+    "colunas": [
+      "_source_file",
+      "ano",
+      "canal_venda",
+      "data_emissao",
+      "desconto_pct",
+      "id_cliente",
+      "id_produto",
+      "id_venda",
+      "mes",
+      "preco_unitario",
+      "qtd_caixas",
+      "representante"
+    ],
+    "linhas": 3482,
+    "sha256": "dce10ffe27d4ac3460b93b71ce801eb891192f9bb1b62326db2db20892a0537c"
+  },
+  "quarentena/clientes": {
+    "colunas": [
+      "_source_file",
+      "ativo",
+      "canal",
+      "cidade",
+      "cnpj",
+      "id_cliente",
+      "motivo_rejeicao",
+      "nome_cliente",
+      "regiao",
+      "representante",
+      "uf"
+    ],
+    "linhas": 5,
+    "sha256": "7b3aa973c6f0d70dde62967c38e551d0be4e0efc11f48ef6a2062ae4a06059a2"
+  },
+  "quarentena/clima": {
+    "ausente": true
+  },
+  "quarentena/financeiro": {
+    "colunas": [
+      "_source_file",
+      "competencia",
+      "competencia_original",
+      "id_financeiro",
+      "id_venda",
+      "motivo_rejeicao",
+      "status",
+      "status_padrao",
+      "tipo_lancamento",
+      "tipo_lancamento_padrao",
+      "valor_bruto",
+      "valor_imposto",
+      "valor_liquido"
+    ],
+    "linhas": 10,
+    "sha256": "d7b88178e8194bab06fb3cfdc85294abad2cf4287e8852b735a39608aa0a1950"
+  },
+  "quarentena/produtos": {
+    "ausente": true
+  },
+  "quarentena/vendas": {
+    "colunas": [
+      "_source_file",
+      "canal_venda",
+      "data_emissao",
+      "data_emissao_original",
+      "desconto_pct",
+      "id_cliente",
+      "id_produto",
+      "id_venda",
+      "motivo_rejeicao",
+      "preco_unitario",
+      "qtd_caixas",
+      "representante"
+    ],
+    "linhas": 18,
+    "sha256": "a1ad7359b21a01655e493bec18aa4f6b9c155fc369cc8aa639614e9d823f0708"
+  },
+  "silver/clientes": {
+    "colunas": [
+      "_source_file",
+      "ativo",
+      "canal",
+      "cidade",
+      "cnpj",
+      "id_cliente",
+      "nome_cliente",
+      "regiao",
+      "representante",
+      "uf"
+    ],
+    "linhas": 115,
+    "sha256": "11093919c3ce0a107327688db87d1dc6ef183779de2b1a3a560eb7a7d500235f"
+  },
+  "silver/clima": {
+    "colunas": [
+      "_api_source",
+      "ano",
+      "mes",
+      "precipitation_sum",
+      "temperature_2m_max",
+      "time"
+    ],
+    "linhas": 2192,
+    "sha256": "c5e09ea3d6853654d1e38de8a5e574fa5c4f7e006e72cd48789be035ddbfa12f"
+  },
+  "silver/financeiro": {
+    "colunas": [
+      "ano",
+      "competencia",
+      "id_financeiro",
+      "id_venda",
+      "mes",
+      "status_padrao",
+      "tipo_lancamento_padrao"
+    ],
+    "linhas": 2454,
+    "sha256": "874c23172bfdd2854fc11984f8599c434f108ec82571691a86e7a602a227a4b6"
+  },
+  "silver/produtos": {
+    "colunas": [
+      "_source_file",
+      "custo_disponivel",
+      "custo_unitario",
+      "embalagem",
+      "familia",
+      "id_produto",
+      "marca",
+      "nome_produto",
+      "preco_disponivel",
+      "preco_tabela",
+      "volume_ml"
+    ],
+    "linhas": 25,
+    "sha256": "221c9ee9d0659f5d3c891f4289afba11ed65c3dfb2980c8cfcb8b40e1da63f86"
+  },
+  "silver/vendas": {
+    "colunas": [
+      "_source_file",
+      "ano",
+      "canal_venda",
+      "data_emissao",
+      "desconto_pct",
+      "id_cliente",
+      "id_produto",
+      "id_venda",
+      "mes",
+      "preco_unitario",
+      "qtd_caixas",
+      "representante"
+    ],
+    "linhas": 3482,
+    "sha256": "dce10ffe27d4ac3460b93b71ce801eb891192f9bb1b62326db2db20892a0537c"
+  }
+}

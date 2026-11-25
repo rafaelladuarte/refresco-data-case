@@ -115,7 +115,7 @@ models:
           - not_null
 
   - name: fato_vendas
-    description: "Tabela fato de vendas materializada como incremental."
+    description: "Tabela fato de vendas, incremental por mudança (`incremental_strategy='merge'`): reprocessa vendas cuja venda ou lançamento financeiro mudou (`atualizado_em`) e as emitidas nos últimos `lookback_days` dias (var, padrão 30)."
     columns:
       - name: sk_venda
         description: "Surrogate Key gerada (MD5) da venda."
@@ -158,6 +158,16 @@ models:
           - relationships:
               to: ref('dim_representante')
               field: sk_representante
+      - name: atualizado_em
+        description: "Quando a venda ou o lançamento financeiro dela mudou pela última vez (maior `changed_at` dos dois). É o marcador do incremental: só avança quando o conteúdo muda."
+        data_tests:
+          - not_null
+      - name: receita_liquida
+        description: "Receita da venda: `qtd_caixas * preco_unitario * (1 - desconto_pct)` (definida em stg_vendas). Só conta como receita quando `entra_receita` é verdadeiro."
+      - name: custo_total
+        description: "Custo da venda: `qtd_caixas * dim_produto.custo_unitario`. NULL quando o produto não tem custo (`custo_disponivel = false`)."
+      - name: margem_bruta
+        description: "Margem bruta da venda: `receita_liquida - custo_total`. NULL quando o custo é NULL."
       - name: tipo_lancamento
         description: "Tipo do lançamento financeiro. NULL quando a venda ainda não possui registro em stg_financeiro (comportamento esperado — venda pendente)."
         data_tests:

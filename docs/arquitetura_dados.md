@@ -65,11 +65,11 @@ ingest_clima ──► clean_clima ───────────────
                                                      ▼
                                             load_to_staging
                                                      │
- dbt_deps ► dbt_seed ► dbt_run_staging ► dbt_run_gold ► dbt_test_gold ► dbt_run_analytics
+ dbt_deps ► dbt_seed ► dbt_run_gold ► dbt_test_gold ► dbt_run_analytics
 ```
 
 - `clean_vendas` depende de clientes e produtos porque faz a validação referencial contra os cadastros já limpos.
-- `dbt_run_staging` roda a cada execução porque o `DROP TABLE ... CASCADE` da carga remove as views `stg_*` (melhoria prevista no card ARQ-03).
+- `load_to_staging` faz `TRUNCATE` + `COPY` de todas as tabelas de `load_stage` numa única transação, com tipos definidos em `pipeline/ddl/load_stage.sql`. As tabelas nunca são derrubadas, então as views `stg_*` sobrevivem à carga; a `dbt_run_gold` as recria (`--select staging marts.gold`) apenas para acompanhar mudanças nos modelos.
 - `dbt_test_gold` bloqueia as views analíticas se algum teste com severidade `error` falhar.
 
 ## 4. Modelo dimensional (schema `gold`)
@@ -174,7 +174,7 @@ erDiagram
 - **Surrogate keys:** hash MD5 (`dbt_utils.generate_surrogate_key`) da chave natural, exceto `sk_tempo`, que é `YYYYMMDD`. As chaves são estáveis entre execuções.
 - **Dimensões:** SCD tipo 1 (estado mais recente). Histórico de clientes (SCD2) está no backlog (MOD-05).
 - **`dim_representante`** é derivada das vendas por (nome, canal). A revisão está no backlog (MOD-03).
-- **`fato_vendas`** é incremental (`unique_key = id_venda`). O filtro atual por `data_emissao` não reprocessa atualizações tardias (card MOD-01).
+- **`fato_vendas`** é incremental por **mudança** (`incremental_strategy = merge`, `unique_key = id_venda`). Uma venda é reprocessada quando ela ou o lançamento financeiro dela mudou depois da última carga (`atualizado_em`, derivado do `_changed_at` da Silver) ou quando foi emitida nos últimos `lookback_days` dias (padrão 30). O lookback cobre mudanças nas dimensões (ex.: custo de produto), que não alteram a venda.
 
 ## 5. Views analíticas
 

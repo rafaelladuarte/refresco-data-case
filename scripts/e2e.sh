@@ -14,6 +14,9 @@
 #   E2E_START_SERVICES=0   usa MinIO/Postgres já em execução (CI: service containers)
 #   E2E_MINIO_PORT / E2E_PG_PORT   portas dos serviços (padrão 19000 / 15432)
 #   E2E_DAG_TEST=0         pula o teste de integridade da DAG (precisa construir a imagem do Airflow)
+#   E2E_DAY2=0             pula o cenário do dia 2 (dados alterados na origem, segunda execução)
+#   E2E_UPDATE_BASELINE=1  regrava tests/baseline/fingerprint.json com o resultado do dia 1. Use só
+#                          quando uma mudança de dados for intencional e justificada no commit.
 #   DBT_IMAGE              imagem do dbt (padrão: a mesma da DAG)
 set -euo pipefail
 
@@ -24,6 +27,9 @@ START_SERVICES="${E2E_START_SERVICES:-1}"
 MINIO_PORT="${E2E_MINIO_PORT:-19000}"
 PG_PORT="${E2E_PG_PORT:-15432}"
 DAG_TEST="${E2E_DAG_TEST:-1}"
+DAY2="${E2E_DAY2:-1}"
+BASELINE="$ROOT/tests/baseline/fingerprint.json"
+WORKDIR="$(mktemp -d)"
 DBT_IMAGE="${DBT_IMAGE:-ghcr.io/dbt-labs/dbt-postgres:1.8.2}"
 MINIO_IMAGE="${E2E_MINIO_IMAGE:-bitnamilegacy/minio:2025.7.23-debian-12-r5}"
 PG_IMAGE="${E2E_PG_IMAGE:-postgres:15}"
@@ -51,6 +57,7 @@ log() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 CONTAINERS=()
 cleanup() {
   local code=$?
+  rm -rf "$WORKDIR"
   if ((${#CONTAINERS[@]})); then
     log "Removendo serviços do teste"
     docker rm -f "${CONTAINERS[@]}" >/dev/null 2>&1 || true
@@ -89,19 +96,27 @@ import psycopg2, os
 psycopg2.connect(host='localhost', port=os.environ['POSTGRES_PORT'], user=os.environ['POSTGRES_USER'],
                  password=os.environ['POSTGRES_PASSWORD'], dbname=os.environ['POSTGRES_DB']).close()"
 
-log "Bronze"
-"$PYTHON" -m pipeline.bronze.ingest_csv
-"$PYTHON" -m pipeline.bronze.ingest_clima
+# Datas lógicas do cenário (a DAG passa `ds` do Airflow; aqui vão como argumento)
+DS_DIA1="2024-06-01"
+DS_DIA2="2024-06-02"
 
-log "Silver"
-"$PYTHON" -m pipeline.silver.clean_clientes
-"$PYTHON" -m pipeline.silver.clean_produtos
-"$PYTHON" -m pipeline.silver.clean_financeiro
-"$PYTHON" -m pipeline.silver.clean_clima
-"$PYTHON" -m pipeline.silver.clean_vendas
+# run_pipeline <ds>: Bronze -> Silver -> load_stage para a data lógica informada
+run_pipeline() {
+  local ds="$1"
+  log "Bronze ($ds)"
+  "$PYTHON" -m pipeline.bronze.ingest_csv "$ds"
+  "$PYTHON" -m pipeline.bronze.ingest_clima "$ds"
 
-log "Carga no load_stage"
-"$PYTHON" -m pipeline.load.staging
+  log "Silver ($ds)"
+  "$PYTHON" -m pipeline.silver.clean_clientes "$ds" "e2e-$ds"
+  "$PYTHON" -m pipeline.silver.clean_produtos "$ds" "e2e-$ds"
+  "$PYTHON" -m pipeline.silver.clean_financeiro "$ds" "e2e-$ds"
+  "$PYTHON" -m pipeline.silver.clean_clima "$ds" "e2e-$ds"
+  "$PYTHON" -m pipeline.silver.clean_vendas "$ds" "e2e-$ds"
+
+  log "Carga no load_stage"
+  "$PYTHON" -m pipeline.load.staging
+}
 
 dbt() {
   # --network host: o profiles.yml lê POSTGRES_HOST/PORT; o container enxerga o Postgres em localhost.
@@ -111,13 +126,92 @@ dbt() {
     "$DBT_IMAGE" "$@" --profiles-dir /usr/app/dbt
 }
 
+# ---------------------------------------------------------------- dia 1
+run_pipeline "$DS_DIA1"
+
 log "dbt deps / seed / build"
 dbt deps
 dbt seed
 dbt build
 
 log "Verificação dos números de referência"
-"$PYTHON" scripts/e2e_verify.py
+E2E_DS="$DS_DIA1" "$PYTHON" scripts/e2e_verify.py
+
+log "Escrita atômica contra o MinIO real (falhas injetadas)"
+"$PYTHON" scripts/e2e_atomic_check.py
+
+# Fingerprint: o conteúdo de cada dataset do dia 1 precisa ser idêntico ao baseline versionado.
+# Só muda por decisão explícita (E2E_UPDATE_BASELINE=1), justificada no commit.
+log "Fingerprint dos datasets (dia 1)"
+"$PYTHON" scripts/fingerprint.py gerar "$WORKDIR/fingerprint.json"
+if [[ "${E2E_UPDATE_BASELINE:-0}" == "1" || ! -f "$BASELINE" ]]; then
+  mkdir -p "$(dirname "$BASELINE")"
+  cp "$WORKDIR/fingerprint.json" "$BASELINE"
+  echo "Baseline gravado em $BASELINE"
+else
+  "$PYTHON" scripts/fingerprint.py comparar "$BASELINE" "$WORKDIR/fingerprint.json"
+fi
+
+# ---------------------------------------------------------------- dia 2
+# Segunda execução sobre uma cópia de data/raw com três mudanças conhecidas (status financeiro de
+# uma venda antiga, uma venda retroativa e o nome de um cliente). Só elas podem aparecer.
+if [[ "$DAY2" == "1" ]]; then
+  log "Dia 2: dados alterados na origem"
+  "$PYTHON" scripts/e2e_mutate.py "$ROOT/data/raw" "$WORKDIR/data/raw" "$WORKDIR/mudancas.json"
+  AIRFLOW_HOME="$WORKDIR" run_pipeline "$DS_DIA2"
+
+  # ARQ-03: o load_to_staging fez TRUNCATE + COPY, então as views stg_* do dia 1 continuam de pé e
+  # já enxergam os dados do dia 2, antes de qualquer dbt run.
+  log "Views stg_* depois da carga (sem dbt)"
+  "$PYTHON" scripts/e2e_views_check.py "$WORKDIR/mudancas.json"
+
+  # dbt build completo: inclui o teste de reconciliação fato x staging e o resto da Gold. Qualquer falha
+  # reprova (MOD-01: o incremental agora propaga a venda retroativa e a mudança de status).
+  log "dbt build (dia 2)"
+  dbt build
+
+  E2E_DS="$DS_DIA2" "$PYTHON" scripts/e2e_verify_day2.py "$WORKDIR/mudancas.json"
+
+  # Lookback (MOD-01): o custo do P001 mudou, mas nenhuma venda mudou. Fora da janela de 30 dias o
+  # `dbt build` não recalcula as vendas antigas (limitação documentada); com a janela ampliada, sim.
+  log "Lookback do incremental: mudança de dimensão em vendas antigas"
+  "$PYTHON" scripts/e2e_lookback_check.py antes "$WORKDIR/mudancas.json"
+  dbt run --select fato_vendas --vars '{lookback_days: 100000}'
+  "$PYTHON" scripts/e2e_lookback_check.py depois "$WORKDIR/mudancas.json"
+
+  # Fato criada antes do MOD-01 (sem `atualizado_em`): o incremental reprocessa tudo e recria a coluna
+  log "Fato antiga (sem atualizado_em): o incremental reprocessa tudo e recria a coluna"
+  "$PYTHON" -c "
+from sqlalchemy import create_engine, text
+from pipeline.common.config import postgres_url
+with create_engine(postgres_url()).begin() as c:
+    c.execute(text('alter table gold.fato_vendas drop column atualizado_em'))"
+  dbt run --select fato_vendas
+  "$PYTHON" -c "
+from sqlalchemy import create_engine, text
+from pipeline.common.config import postgres_url
+with create_engine(postgres_url()).connect() as c:
+    total, com = c.execute(text('select count(*), count(atualizado_em) from gold.fato_vendas')).one()
+print(f'[{\"OK\" if (total, com) == (3483, 3483) else \"FALHA\"}] fato antiga: linhas={total} com atualizado_em={com} esperado=3483/3483')
+raise SystemExit(0 if (total, com) == (3483, 3483) else 1)"
+
+  # Idempotência e backfill fora de ordem (ARQ-01). O estado atual (dia 2) é a referência.
+  log "Fingerprint do estado após o dia 2"
+  "$PYTHON" scripts/fingerprint.py gerar "$WORKDIR/fingerprint_dia2.json"
+
+  # Reexecuta o dia 2: mesma data lógica, mesmos dados -> nada pode mudar
+  log "Reexecução do dia 2 (idempotência)"
+  AIRFLOW_HOME="$WORKDIR" run_pipeline "$DS_DIA2"
+  "$PYTHON" scripts/fingerprint.py gerar "$WORKDIR/fingerprint_reexec.json"
+  "$PYTHON" scripts/fingerprint.py comparar "$WORKDIR/fingerprint_dia2.json" "$WORKDIR/fingerprint_reexec.json"
+
+  # Reexecuta o dia 1 DEPOIS do dia 2 (backfill fora de ordem): a data lógica mais antiga não pode
+  # desfazer as mudanças do dia 2 na Silver. Compara só a Silver: o dbt não rodou de novo.
+  log "Backfill fora de ordem: dia 1 depois do dia 2"
+  run_pipeline "$DS_DIA1"
+  "$PYTHON" scripts/fingerprint.py gerar "$WORKDIR/fingerprint_backfill.json"
+  "$PYTHON" scripts/fingerprint.py comparar "$WORKDIR/fingerprint_dia2.json" "$WORKDIR/fingerprint_backfill.json"
+fi
 
 if [[ "$DAG_TEST" == "1" ]]; then
   log "Integridade da DAG (imagem do Airflow)"

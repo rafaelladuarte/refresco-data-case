@@ -41,8 +41,7 @@ DEPENDENCIAS_ESPERADAS = {
     "load_to_staging": {"clean_vendas_silver", "clean_financeiro_silver", "clean_clima_silver"},
     "dbt_deps": {"load_to_staging"},
     "dbt_seed": {"dbt_deps"},
-    "dbt_run_staging": {"dbt_seed"},
-    "dbt_run_gold": {"dbt_run_staging"},
+    "dbt_run_gold": {"dbt_seed"},
     "dbt_test_gold": {"dbt_run_gold"},
     "dbt_run_analytics": {"dbt_test_gold"},
 }
@@ -62,9 +61,9 @@ def test_dag_carrega_sem_erros_de_importacao(dagbag):
     assert DAG_ID in dagbag.dags
 
 
-def test_quatorze_tasks_com_dependencias_esperadas(dagbag):
+def test_treze_tasks_com_dependencias_esperadas(dagbag):
     dag = dagbag.dags[DAG_ID]
-    assert len(dag.tasks) == 14
+    assert len(dag.tasks) == 13
     assert {t.task_id: set(t.upstream_task_ids) for t in dag.tasks} == DEPENDENCIAS_ESPERADAS
 
 
@@ -79,3 +78,41 @@ def test_dbt_roda_com_usuario_do_host(dagbag):
         if task.task_id.startswith("dbt_"):
             assert task.user == "1000:1000"
             assert task.environment["HOME"] == "/tmp"
+
+
+TASKS_POR_DATA_LOGICA = [
+    "ingest_bronze_csv",
+    "ingest_bronze_clima",
+    "clean_clientes_silver",
+    "clean_produtos_silver",
+    "clean_financeiro_silver",
+    "clean_clima_silver",
+    "clean_vendas_silver",
+]
+
+
+@pytest.mark.parametrize("task_id", TASKS_POR_DATA_LOGICA)
+def test_tasks_bronze_e_silver_recebem_a_data_logica(dagbag, task_id):
+    """O PythonOperator injeta `ds` (data lógica) em quem declara o parâmetro: é o que torna a
+    partição Bronze e o merge da Silver idempotentes e permite backfill (ARQ-01)."""
+    import inspect
+
+    task = dagbag.dags[DAG_ID].get_task(task_id)
+    assert "ds" in inspect.signature(task.python_callable).parameters
+
+
+@pytest.mark.parametrize("task_id", [t for t in TASKS_POR_DATA_LOGICA if t.endswith("_silver")])
+def test_tasks_silver_recebem_o_run_id_para_a_auditoria(dagbag, task_id):
+    """O `run_id` do Airflow identifica a execução em `audit.dq_results` (ARQ-05)."""
+    import inspect
+
+    task = dagbag.dags[DAG_ID].get_task(task_id)
+    assert "run_id" in inspect.signature(task.python_callable).parameters
+
+
+def test_views_de_staging_sao_recriadas_junto_com_a_gold(dagbag):
+    """Sem task própria para as views stg_*: elas sobrevivem à carga (TRUNCATE + COPY, ARQ-03)."""
+    dag = dagbag.dags[DAG_ID]
+    assert "dbt_run_staging" not in dag.task_ids
+    comando = dag.get_task("dbt_run_gold").command
+    assert "--select staging marts.gold" in comando

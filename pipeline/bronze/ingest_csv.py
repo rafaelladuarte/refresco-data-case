@@ -1,11 +1,13 @@
 import io
 import os
+import sys
 from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
 
 from pipeline.common.logging import get_logger
+from pipeline.common.logical_date import resolve_ds
 from pipeline.common.storage import ensure_bucket, get_s3_client
 
 logger = get_logger(__name__)
@@ -26,19 +28,16 @@ SOURCE_ENCODINGS = {
 BRONZE_ENCODING = "utf-8"
 
 
-def get_ingestion_date():
-    return datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-
-
 def get_timestamp():
     """Retorna o timestamp atual."""
     return datetime.now()
 
 
-def process_table(fs, table_name: str):
+def process_table(fs, table_name: str, ds: str):
     """
     Lê um arquivo CSV da pasta local data/raw,
-    adiciona metadados e salva na camada Bronze no MinIO
+    adiciona metadados e salva na camada Bronze no MinIO, na partição da data lógica `ds`.
+    Reexecutar a mesma data sobrescreve o mesmo objeto (idempotente).
     """
     source_file = LOCAL_RAW_DIR / f"{table_name}.csv"
 
@@ -60,9 +59,9 @@ def process_table(fs, table_name: str):
 
         df["_ingested_at"] = get_timestamp()
         df["_source_file"] = f"{table_name}.csv"
+        df["_logical_date"] = ds
 
-        ingestion_date = get_ingestion_date()
-        partition_path = f"{BRONZE_DIR}/{table_name}/ingestion_date={ingestion_date}"
+        partition_path = f"{BRONZE_DIR}/{table_name}/ingestion_date={ds}"
 
         if not ensure_bucket(fs, BRONZE_DIR):
             raise Exception("Não foi possível verificar/criar o bucket bronze")
@@ -85,7 +84,7 @@ def process_table(fs, table_name: str):
             logger.info(f"[OK] Sucesso: {table_name} salvo no MinIO")
             logger.info(f"- Caminho: {target_path}")
             logger.info(f"- Tamanho: {file_size} bytes")
-            logger.info(f"- Partição: {ingestion_date}")
+            logger.info(f"- Partição: {ds}")
         else:
             logger.error("[ERRO] Falha: arquivo não encontrado após salvamento")
             raise Exception(f"Falha ao salvar o arquivo {target_path}")
@@ -139,18 +138,19 @@ def list_bronze_files(fs):
         logger.error(f"Erro ao listar arquivos: {e}")
 
 
-def main():
-    """Função principal para coordenar a ingestão das entidades."""
+def main(ds: str | None = None):
+    """Função principal para coordenar a ingestão das entidades na partição da data lógica `ds`."""
     tables = ["clientes", "financeiro", "produtos", "vendas"]
+    ds = resolve_ds(ds)
 
-    logger.info(f"Pipeline de Ingestão: Data Local ({LOCAL_RAW_DIR}) -> MinIO (Bronze)")
+    logger.info(f"Pipeline de Ingestão ({ds}): Data Local ({LOCAL_RAW_DIR}) -> MinIO (Bronze)")
 
     list_local_raw_files()
 
     fs = get_s3_client()
 
     for table in tables:
-        process_table(fs, table)
+        process_table(fs, table, ds)
 
     list_bronze_files(fs)
 
@@ -158,4 +158,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1] if len(sys.argv) > 1 else None)
