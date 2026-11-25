@@ -72,10 +72,10 @@ Os órfãos já são removidos na Silver, então os testes de relacionamento com
 
 - **Arquivos:** `dbt/models/marts/gold/schema.yml`
 - **Critérios de aceite:**
-  - [ ] `relationships` de `sk_cliente` e `sk_produto` com `severity: error`
-  - [ ] Teste de unicidade de `id_venda` em `stg_financeiro` (protege a fato contra fan-out)
-  - [ ] Teste singular de reconciliação: contagem e soma de `receita_liquida` na fato iguais às de `stg_vendas`
-  - [ ] `accepted_values` para `canal`, `uf`, `familia`
+  - [x] `relationships` de `sk_cliente` e `sk_produto` com `severity: error`
+  - [x] Teste de unicidade de `id_venda` em `stg_financeiro` (protege a fato contra fan-out)
+  - [x] Teste singular de reconciliação: contagem e soma de `receita_liquida` na fato iguais às de `stg_vendas`
+  - [x] `accepted_values` para `canal`, `uf`, `familia`
 
 ### DQ-09 · Validar custo unitário de produtos
 `qualidade-dados` · 🟠 Média · `P`

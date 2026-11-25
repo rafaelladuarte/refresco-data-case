@@ -153,6 +153,13 @@ pipeline/common/
 - Teste singular `assert_fato_reconcilia_com_staging.sql`: contagem e soma de `receita_liquida` na fato iguais às de `stg_vendas`. Ele teria pegado, na hora, a duplicação da Sprint 1.
 - `accepted_values` com os domínios atuais: `dim_cliente.canal` (5 canais + `Não informado`), `dim_cliente.uf`, `dim_cliente.regiao` e `dim_produto.familia`. A lista exata sai dos dados na implementação.
 - **Validação:** `dbt build` verde. Um teste negativo, introduzindo de propósito uma duplicata numa base de teste, precisa fazer o teste de reconciliação falhar.
+- **Resultado da execução:**
+  - `relationships` e `not_null` de `sk_cliente`/`sk_produto` na fato agora são `error` (sem órfãos na fato: 0 de 3.482). `unique` em `stg_financeiro.id_venda` (2.454 linhas, todas distintas).
+  - `tests/assert_fato_reconcilia_com_staging.sql` compara contagem e soma de `receita_liquida` da fato com `stg_vendas` (arredondada em 2 casas).
+  - `accepted_values` com os domínios reais: `canal` (5 + `Não informado`), `uf` (`MG`), `regiao` (4) e `familia` (7).
+  - `dbt test`: **75 PASS** (eram 69), 0 WARN, 0 ERROR.
+  - Teste negativo: com uma linha duplicada inserida na fato do ambiente de dev, o teste de reconciliação falhou (`FAIL 1`). A linha foi removida em seguida (fato de volta a 3.482) e o teste voltou a passar.
+  - Os `accepted_values` são listas fechadas: uma UF, região, canal ou família nova na origem faz o build falhar de propósito, até a lista ser atualizada.
 
 ### Fase 5: CI
 
