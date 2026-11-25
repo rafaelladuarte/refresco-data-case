@@ -30,3 +30,14 @@ exclude_also = [
     "def load_to_staging\\(",
     "if __name__ == .__main__.:",
 ]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+extend-exclude = ["dbt", "notebooks", "streamlit"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["pipeline"]

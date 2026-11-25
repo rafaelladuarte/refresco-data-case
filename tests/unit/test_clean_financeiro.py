@@ -8,12 +8,23 @@ from pipeline.silver.clean_financeiro import normalize_status, normalize_tipo_la
     "origem, esperado",
     [
         # Variações reais de data/raw/financeiro.csv
-        ("VENDA", "VENDA"), ("venda", "VENDA"), ("Venda", "VENDA"), ("VENDAS", "VENDA"), ("vnd", "VENDA"), ("V", "VENDA"),
-        ("DEVOLUCAO", "DEVOLUCAO"), ("devolução", "DEVOLUCAO"), ("Dev", "DEVOLUCAO"), ("DEVOL", "DEVOLUCAO"),
+        ("VENDA", "VENDA"),
+        ("venda", "VENDA"),
+        ("Venda", "VENDA"),
+        ("VENDAS", "VENDA"),
+        ("vnd", "VENDA"),
+        ("V", "VENDA"),
+        ("DEVOLUCAO", "DEVOLUCAO"),
+        ("devolução", "DEVOLUCAO"),
+        ("Dev", "DEVOLUCAO"),
+        ("DEVOL", "DEVOLUCAO"),
         ("D", "DEVOLUCAO"),
-        ("BONIFICACAO", "BONIFICACAO"), ("bonificação", "BONIFICACAO"), ("BONIF.", "BONIFICACAO"),
+        ("BONIFICACAO", "BONIFICACAO"),
+        ("bonificação", "BONIFICACAO"),
+        ("BONIF.", "BONIFICACAO"),
         ("Bonif", "BONIFICACAO"),
-        ("AJUSTE", "AJUSTE"), ("outro", "OUTRO"),
+        ("AJUSTE", "AJUSTE"),
+        ("outro", "OUTRO"),
         (" venda ", "VENDA"),
     ],
 )
@@ -26,8 +37,10 @@ def test_tipo_lancamento_desconhecido_ou_vazio_vira_nulo(origem):
     assert normalize_tipo_lancamento(pd.Series([origem], dtype="object")).isna().all()
 
 
-@pytest.mark.parametrize("origem, esperado", [("PAGO", "PAGO"), (" pago ", "PAGO"), ("Pendente", "PENDENTE"),
-                                              ("cancelado", "CANCELADO")])
+@pytest.mark.parametrize(
+    "origem, esperado",
+    [("PAGO", "PAGO"), (" pago ", "PAGO"), ("Pendente", "PENDENTE"), ("cancelado", "CANCELADO")],
+)
 def test_normalize_status(origem, esperado):
     assert normalize_status(pd.Series([origem])).tolist() == [esperado]
 

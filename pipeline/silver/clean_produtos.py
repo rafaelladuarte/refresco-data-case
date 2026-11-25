@@ -29,32 +29,38 @@ def flag_valores_indisponiveis(df: pd.DataFrame) -> pd.DataFrame:
 
 def main():
     logger.info("Iniciando processamento Silver para Produtos")
-    
+
     try:
         fs = get_s3_client()
         df = read_bronze(fs, "produtos")
         if df is None:
             return
         logger.info(f"Linhas lidas da Bronze: {len(df)}")
-        
+
         for col in ["nome_produto", "familia", "marca", "embalagem"]:
             df[col] = clean_text(df[col])
-        
-        df["familia"] = df["familia"].str.upper().replace({
-            "REFRIGERANTES": "REFRIGERANTE", 
-            "SUCOS": "SUCO", 
-            "CERVEJAS": "CERVEJA", 
-            "ÁGUAS": "AGUA", 
-            "AGUAS": "AGUA"
-        })
-        
-        df["volume_ml"] = df["volume_ml"].astype(str).str.extract(r'(\d+)').astype(float)
-        
+
+        df["familia"] = (
+            df["familia"]
+            .str.upper()
+            .replace(
+                {
+                    "REFRIGERANTES": "REFRIGERANTE",
+                    "SUCOS": "SUCO",
+                    "CERVEJAS": "CERVEJA",
+                    "ÁGUAS": "AGUA",
+                    "AGUAS": "AGUA",
+                }
+            )
+        )
+
+        df["volume_ml"] = df["volume_ml"].astype(str).str.extract(r"(\d+)").astype(float)
+
         for col in ["preco_tabela", "custo_unitario"]:
             df[col] = pd.to_numeric(df[col], errors="coerce")
-            
+
         df["_ingested_at"] = pd.to_datetime(df["_ingested_at"], errors="coerce")
-        
+
         # Normaliza id_produto: remove espaços e descarta formatos inválidos
         df["id_produto"] = normalize_id(df["id_produto"])
 
@@ -78,10 +84,11 @@ def main():
 
         write_silver(fs, df, "s3://silver/produtos/produtos_clean.parquet")
         logger.info("[OK] Tabela de Produtos salva com sucesso em silver/produtos/!")
-        
+
     except Exception as e:
         logger.error(f"[ERRO] Erro no processamento de Produtos: {str(e)}")
         raise
+
 
 if __name__ == "__main__":
     main()

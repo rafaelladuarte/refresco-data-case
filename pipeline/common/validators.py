@@ -1,12 +1,13 @@
 """Padrões de ID e normalização de colunas usados por mais de uma entidade da Silver."""
+
 import re
 
 import pandas as pd
 
 # Formato válido de id_cliente: C seguido de 4 dígitos (ex: C0001 – C9999)
-PATTERN_ID_CLIENTE = re.compile(r'^C\d{4}$', re.IGNORECASE)
+PATTERN_ID_CLIENTE = re.compile(r"^C\d{4}$", re.IGNORECASE)
 # Formato válido de id_produto: P seguido de 3 dígitos (ex: P001 – P999)
-PATTERN_ID_PRODUTO = re.compile(r'^P\d{3}$', re.IGNORECASE)
+PATTERN_ID_PRODUTO = re.compile(r"^P\d{3}$", re.IGNORECASE)
 
 
 def normalize_id(series: pd.Series) -> pd.Series:

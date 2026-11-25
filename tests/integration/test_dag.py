@@ -2,11 +2,15 @@
 
 Sem Airflow instalado (job lint-unit, virtualenv local), o módulo inteiro é pulado.
 """
+
+import os
 from pathlib import Path
 
 import pytest
 
-pytest.importorskip("airflow")
+# No e2e (REQUIRE_AIRFLOW=1) a ausência do Airflow é erro, não pulo: um pulo passaria por sucesso.
+if os.environ.get("REQUIRE_AIRFLOW") != "1":
+    pytest.importorskip("airflow")
 from airflow.models import DagBag  # noqa: E402
 
 pytestmark = pytest.mark.airflow
@@ -17,9 +21,13 @@ DAG_ID = "dag_etl_pipeline"
 # A DAG exige estas variáveis na importação (falha cedo se faltarem)
 ENV_DAG = {
     "DBT_PROJECT_HOST_PATH": "/tmp/dbt",
-    "POSTGRES_USER": "u", "POSTGRES_PASSWORD": "p", "POSTGRES_DB": "gold",
-    "POSTGRES_HOST": "postgres-gold", "POSTGRES_PORT": "5432",
-    "HOST_UID": "1000", "HOST_GID": "1000",
+    "POSTGRES_USER": "u",
+    "POSTGRES_PASSWORD": "p",
+    "POSTGRES_DB": "gold",
+    "POSTGRES_HOST": "postgres-gold",
+    "POSTGRES_PORT": "5432",
+    "HOST_UID": "1000",
+    "HOST_GID": "1000",
 }
 
 DEPENDENCIAS_ESPERADAS = {

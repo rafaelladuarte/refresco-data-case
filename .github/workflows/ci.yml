@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint-unit:
+    name: Lint e testes unitários
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Instalar dependências
+        run: pip install -r requirements-dev.txt
+
+      - name: Ruff (lint)
+        run: ruff check .
+
+      - name: Ruff (formato)
+        run: ruff format --check .
+
+      # O gate de cobertura (fail_under = 80 em pipeline/common e nas funções de regra)
+      # está no pyproject.toml. O teste da DAG é pulado: o Airflow só existe no job e2e.
+      - name: Pytest com cobertura
+        run: pytest tests/unit --cov --cov-report=term-missing --cov-report=xml
+
+      - name: Publicar relatório de cobertura
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          if-no-files-found: ignore
+
+  e2e:
+    name: E2E (MinIO + Postgres + dbt)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      minio:
+        image: bitnamilegacy/minio:2025.7.23-debian-12-r5
+        env:
+          MINIO_ROOT_USER: e2e_access_key
+          MINIO_ROOT_PASSWORD: e2e_secret_key_123
+        ports:
+          - 9000:9000
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: e2e_user
+          POSTGRES_PASSWORD: e2e_password
+          POSTGRES_DB: gold
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U e2e_user -d gold"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Os serviços acima já estão no ar: o script só usa as portas, não sobe containers.
+      E2E_START_SERVICES: "0"
+      E2E_MINIO_PORT: "9000"
+      E2E_PG_PORT: "5432"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Instalar dependências
+        run: pip install -r requirements-dev.txt
+
+      # Clima vem de tests/fixtures/open_meteo (CLIMA_FIXTURE_DIR): a CI não depende da API.
+      # O script roda Bronze -> Silver -> load_stage -> dbt deps/seed/build -> verificação
+      # dos números de referência -> integridade da DAG na imagem do Airflow.
+      - name: Pipeline ponta a ponta
+        run: scripts/e2e.sh

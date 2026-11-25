@@ -40,7 +40,12 @@ class TestNormalizeAtivo:
 
 
 def cliente(id_cliente, cnpj="11.111.111/0001-11", nome="Cliente", ingested="2024-01-01"):
-    return {"id_cliente": id_cliente, "cnpj": cnpj, "nome_cliente": nome, "_ingested_at": pd.Timestamp(ingested)}
+    return {
+        "id_cliente": id_cliente,
+        "cnpj": cnpj,
+        "nome_cliente": nome,
+        "_ingested_at": pd.Timestamp(ingested),
+    }
 
 
 def dedup(*linhas):
@@ -61,7 +66,9 @@ class TestDeduplicateClientes:
         assert ok["nome_cliente"].tolist() == ["Segunda"]
 
     def test_cnpj_duplicado_mantem_o_menor_id(self):
-        ok, quarentena = dedup(cliente("C0200", cnpj="X"), cliente("C0001", cnpj="X"), cliente("C0002", cnpj="Y"))
+        ok, quarentena = dedup(
+            cliente("C0200", cnpj="X"), cliente("C0001", cnpj="X"), cliente("C0002", cnpj="Y")
+        )
         assert ok["id_cliente"].tolist() == ["C0001", "C0002"]
         assert quarentena["id_cliente"].tolist() == ["C0200"]
         assert quarentena["motivo_rejeicao"].tolist() == ["CNPJ duplicado de C0001"]

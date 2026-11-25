@@ -1,4 +1,5 @@
 """Testes de pipeline.common.storage com um filesystem falso (sem MinIO)."""
+
 from unittest.mock import MagicMock, call, patch
 
 import pandas as pd
@@ -49,16 +50,21 @@ class TestReadBronze:
         fs.glob.assert_called_once_with("bronze/vendas/**/*.csv")
 
     def test_concatena_todas_as_particoes_com_indice_novo(self, fs):
-        fs.glob.return_value = ["bronze/vendas/ingestion_date=1/v.csv", "bronze/vendas/ingestion_date=2/v.csv"]
+        fs.glob.return_value = [
+            "bronze/vendas/ingestion_date=1/v.csv",
+            "bronze/vendas/ingestion_date=2/v.csv",
+        ]
         partes = [pd.DataFrame({"id": ["A"]}), pd.DataFrame({"id": ["B", "C"]})]
         with patch.object(storage.pd, "read_csv", side_effect=partes) as read_csv:
             df = storage.read_bronze(fs, "vendas")
         assert df["id"].tolist() == ["A", "B", "C"]
         assert df.index.tolist() == [0, 1, 2]
-        read_csv.assert_has_calls([
-            call("s3://bronze/vendas/ingestion_date=1/v.csv", storage_options=OPTS),
-            call("s3://bronze/vendas/ingestion_date=2/v.csv", storage_options=OPTS),
-        ])
+        read_csv.assert_has_calls(
+            [
+                call("s3://bronze/vendas/ingestion_date=1/v.csv", storage_options=OPTS),
+                call("s3://bronze/vendas/ingestion_date=2/v.csv", storage_options=OPTS),
+            ]
+        )
 
 
 def test_read_silver_usa_as_credenciais():
@@ -75,8 +81,11 @@ class TestWriteSilver:
             storage.write_silver(fs, df, "s3://silver/vendas/", partition_cols=["ano", "mes"])
         fs.rm.assert_called_once_with("s3://silver/vendas/", recursive=True)
         to_parquet.assert_called_once_with(
-            path="s3://silver/vendas/", partition_cols=["ano", "mes"],
-            storage_options=OPTS, index=False, compression="snappy",
+            path="s3://silver/vendas/",
+            partition_cols=["ano", "mes"],
+            storage_options=OPTS,
+            index=False,
+            compression="snappy",
         )
 
     def test_primeira_escrita_nao_remove_nada(self, fs):

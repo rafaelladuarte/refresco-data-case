@@ -74,16 +74,22 @@ def validate_vendas(
         (df["data_emissao"].isna(), "data_emissao inválida: " + fmt("data_emissao_original")),
         (~(df["qtd_caixas"] > 0), "qtd_caixas deve ser > 0: " + fmt("qtd_caixas")),
         (~(df["preco_unitario"] > 0), "preco_unitario deve ser > 0: " + fmt("preco_unitario")),
-        (~df["desconto_pct"].between(0, 1, inclusive="left"),
-         "desconto_pct fora de [0, 1): " + fmt("desconto_pct")),
+        (
+            ~df["desconto_pct"].between(0, 1, inclusive="left"),
+            "desconto_pct fora de [0, 1): " + fmt("desconto_pct"),
+        ),
         (cliente_vazio, "id_cliente vazio"),
         (~cliente_vazio & ~cliente_formato_ok, "id_cliente formato inválido: " + fmt("id_cliente")),
-        (~cliente_vazio & cliente_formato_ok & ~df["id_cliente"].isin(ids_clientes_validos),
-         "id_cliente sem cadastro: " + fmt("id_cliente")),
+        (
+            ~cliente_vazio & cliente_formato_ok & ~df["id_cliente"].isin(ids_clientes_validos),
+            "id_cliente sem cadastro: " + fmt("id_cliente"),
+        ),
         (produto_vazio, "id_produto vazio"),
         (~produto_vazio & ~produto_formato_ok, "id_produto formato inválido: " + fmt("id_produto")),
-        (~produto_vazio & produto_formato_ok & ~df["id_produto"].isin(ids_produtos_validos),
-         "id_produto sem cadastro: " + fmt("id_produto")),
+        (
+            ~produto_vazio & produto_formato_ok & ~df["id_produto"].isin(ids_produtos_validos),
+            "id_produto sem cadastro: " + fmt("id_produto"),
+        ),
     ]
 
     if df.empty:
@@ -141,7 +147,9 @@ def main():
 
         df["_ingested_at"] = pd.to_datetime(df["_ingested_at"], errors="coerce")
         # Ordenação estável: em empate de _ingested_at o resultado é determinístico
-        df = df.sort_values("_ingested_at", kind="mergesort").drop_duplicates(subset=["id_venda"], keep="last")
+        df = df.sort_values("_ingested_at", kind="mergesort").drop_duplicates(
+            subset=["id_venda"], keep="last"
+        )
         logger.info(f"Após deduplicação por id_venda: {len(df)} linhas")
 
         # ------------------------------------------------------------------
@@ -168,7 +176,9 @@ def main():
 
         if not df_quarentena.empty:
             # Log por tipo de regra (sem o valor específico) para visibilidade no Airflow
-            regras = df_quarentena["motivo_rejeicao"].str.split(" | ", regex=False).explode().str.split(":").str[0]
+            regras = (
+                df_quarentena["motivo_rejeicao"].str.split(" | ", regex=False).explode().str.split(":").str[0]
+            )
             for regra, qtd in regras.value_counts().items():
                 logger.warning(f"  [{qtd} registros] {regra}")
 

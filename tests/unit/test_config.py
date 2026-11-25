@@ -12,7 +12,12 @@ from pipeline.common.config import (
 )
 
 CLIMA_VARS = [
-    "OPEN_METEO_ARCHIVE_URL", "CLIMA_LATITUDE", "CLIMA_LONGITUDE", "CLIMA_ANO_INICIO", "CLIMA_ANO_FIM",
+    "OPEN_METEO_ARCHIVE_URL",
+    "CLIMA_LATITUDE",
+    "CLIMA_LONGITUDE",
+    "CLIMA_ANO_INICIO",
+    "CLIMA_ANO_FIM",
+    "CLIMA_FIXTURE_DIR",
 ]
 
 
@@ -37,7 +42,9 @@ class TestS3Config:
         monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "s")
         monkeypatch.delenv("AIRFLOW__S3__ENDPOINT_URL", raising=False)
         assert s3_storage_options() == {
-            "key": "k", "secret": "s", "client_kwargs": {"endpoint_url": DEFAULT_S3_ENDPOINT},
+            "key": "k",
+            "secret": "s",
+            "client_kwargs": {"endpoint_url": DEFAULT_S3_ENDPOINT},
         }
 
     def test_endpoint_do_ambiente(self, monkeypatch):
@@ -77,7 +84,11 @@ class TestClimaConfig:
     def test_padrao_uberlandia_2020_2025(self):
         config = ClimaConfig.from_env()
         assert config == ClimaConfig(
-            api_url=DEFAULT_OPEN_METEO_URL, latitude=-18.9186, longitude=-48.2772, ano_inicio=2020, ano_fim=2025,
+            api_url=DEFAULT_OPEN_METEO_URL,
+            latitude=-18.9186,
+            longitude=-48.2772,
+            ano_inicio=2020,
+            ano_fim=2025,
         )
 
     def test_valores_do_ambiente_sao_tipados(self, monkeypatch):
@@ -86,6 +97,13 @@ class TestClimaConfig:
         monkeypatch.setenv("CLIMA_ANO_FIM", "2024")
         config = ClimaConfig.from_env()
         assert (config.latitude, config.ano_inicio, config.ano_fim) == (-23.5, 2024, 2024)
+
+    def test_fixture_dir_vem_do_ambiente_e_vazio_vira_none(self, monkeypatch):
+        assert ClimaConfig.from_env().fixture_dir is None
+        monkeypatch.setenv("CLIMA_FIXTURE_DIR", "tests/fixtures/open_meteo")
+        assert ClimaConfig.from_env().fixture_dir == "tests/fixtures/open_meteo"
+        monkeypatch.setenv("CLIMA_FIXTURE_DIR", "")
+        assert ClimaConfig.from_env().fixture_dir is None
 
     def test_periodo_invertido_gera_erro(self, monkeypatch):
         monkeypatch.setenv("CLIMA_ANO_INICIO", "2025")

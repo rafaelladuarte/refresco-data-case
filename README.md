@@ -1,5 +1,7 @@
 # 🚀 Refresco Data-Case: pipeline Medallion de vendas
 
+[![CI](https://github.com/rafaelladuarte/refresco-data-case/actions/workflows/ci.yml/badge.svg)](https://github.com/rafaelladuarte/refresco-data-case/actions/workflows/ci.yml)
+
 Pipeline de dados **Bronze → Silver → Gold** que transforma arquivos de vendas, clientes, produtos e lançamentos financeiros de uma distribuidora de bebidas do Triângulo Mineiro, mais o clima diário de Uberlândia, em um **data warehouse dimensional** com regras de negócio versionadas, testes de qualidade e um dashboard analítico.
 
 **Stack:** Docker Compose · Apache Airflow 2.9 · Python 3.12 / pandas · MinIO (S3) · PostgreSQL 15 · dbt-core 1.8 · Streamlit
@@ -192,6 +194,8 @@ pip install -r requirements-dev.txt
 
 pytest --cov                                    # testes + gate de 80% (pipeline/common e funções de regra)
 coverage report --include='pipeline/*' --fail-under=0   # relatório completo, sem gate
+
+ruff check . && ruff format --check .           # lint e formato (configuração no pyproject.toml)
 ```
 
 - `tests/unit/`: funções puras (validação de vendas, dedup de clientes, datas, mapeamentos do financeiro, normalizações, configuração, storage e ingestão de clima com respostas HTTP simuladas). Não precisam de MinIO, Postgres nem rede.
@@ -203,6 +207,26 @@ docker run --rm --entrypoint bash -v "$PWD:/opt/airflow/repo:ro" -w /opt/airflow
 ```
 
 As funções `main()`, que só fazem entrada e saída (S3/Postgres), ficam fora do gate e são cobertas pela execução de ponta a ponta.
+
+### Teste ponta a ponta (`scripts/e2e.sh`)
+
+Roda o pipeline inteiro (Bronze → Silver → `load_stage` → `dbt deps/seed/build`) sobre `data/raw` e compara o resultado com os números de referência (3.482 vendas na fato, 18 e 5 registros nas quarentenas de vendas e clientes, receita total e Q4 sem margem para produtos sem custo). No fim, roda o teste de integridade da DAG na imagem do Airflow.
+
+```bash
+scripts/e2e.sh                       # sobe MinIO e Postgres descartáveis (portas 19000 e 15432) e os remove ao terminar
+E2E_DAG_TEST=0 scripts/e2e.sh        # pula o build da imagem do Airflow (mais rápido)
+```
+
+O script não lê o `.env` nem toca no ambiente de desenvolvimento. O clima vem de respostas gravadas da Open-Meteo em `tests/fixtures/open_meteo/` (variável `CLIMA_FIXTURE_DIR`), então o teste não depende da API.
+
+### CI (GitHub Actions)
+
+`.github/workflows/ci.yml` roda em todo `push` e `pull_request`, com dois jobs:
+
+| Job | O que faz |
+|---|---|
+| `lint-unit` | `ruff check`, `ruff format --check` e `pytest tests/unit` com o gate de cobertura |
+| `e2e` | MinIO e Postgres como *service containers* e `scripts/e2e.sh` |
 
 ---
 
@@ -225,7 +249,9 @@ refresco-data-case/
 │   └── macros/                   # generate_schema_name
 ├── streamlit/                    # Dashboard (imagem própria)
 ├── data/raw/                     # CSVs de origem
-├── tests/                        # unit/ (pytest, sem infraestrutura) e integration/ (DAG)
+├── tests/                        # unit/ (pytest, sem infraestrutura), integration/ (DAG) e fixtures/ (clima gravado)
+├── scripts/                      # e2e.sh (teste ponta a ponta, usado pela CI) e e2e_verify.py
+├── .github/workflows/ci.yml      # CI: lint + unit e e2e
 ├── notebooks/exploration/        # Exploração e prototipação da limpeza
 ├── docs/
 │   ├── arquitetura_dados.md      # Componentes, DAG, ER e testes
@@ -238,7 +264,7 @@ refresco-data-case/
 ├── Dockerfile                    # Airflow 2.9.0 / Python 3.12 + constraints oficial
 ├── requirements.txt              # Runtime da imagem do Airflow (versões fixas)
 ├── requirements-dev.txt          # Testes e notebooks
-├── pyproject.toml                # Configuração do pytest e da cobertura
+├── pyproject.toml                # Configuração do pytest, da cobertura e do ruff
 └── .env.example
 ```
 

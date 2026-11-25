@@ -33,9 +33,12 @@ def normalize_ativo(value):
     v = str(value).strip().lower()
     true_values = {"s", "sim", "1", "true", "t", "yes"}
     false_values = {"n", "nao", "não", "0", "false", "f", "no"}
-    if v in true_values: return True
-    elif v in false_values: return False
+    if v in true_values:
+        return True
+    if v in false_values:
+        return False
     return None
+
 
 def deduplicate_clientes(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Aplica as regras de validação e deduplicação do cadastro de clientes.
@@ -88,21 +91,22 @@ def deduplicate_clientes(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
 
     df_quarentena = (
         pd.concat(rejeitados, ignore_index=True).drop(columns="_id_canonico", errors="ignore")
-        if rejeitados else df.iloc[0:0].assign(motivo_rejeicao=pd.Series(dtype="string"))
+        if rejeitados
+        else df.iloc[0:0].assign(motivo_rejeicao=pd.Series(dtype="string"))
     )
     return df.sort_values("id_cliente").reset_index(drop=True), df_quarentena
 
 
 def main():
     logger.info("Iniciando processamento Silver para Clientes")
-    
+
     try:
         fs = get_s3_client()
         df = read_bronze(fs, "clientes")
         if df is None:
             return
         logger.info(f"Linhas lidas inicialmente: {len(df)}")
-        
+
         cols_str = ["nome_cliente", "canal", "regiao", "cidade", "uf", "representante"]
         for col in cols_str:
             df[col] = clean_text(df[col])
@@ -113,12 +117,14 @@ def main():
             reparados += int((corrigido != df[col]).sum())
             df[col] = corrigido
         if reparados:
-            logger.warning(f"{reparados} valores com dupla codificação (mojibake) corrigidos na origem de clientes")
-            
+            logger.warning(
+                f"{reparados} valores com dupla codificação (mojibake) corrigidos na origem de clientes"
+            )
+
         df["_ingested_at"] = pd.to_datetime(df["_ingested_at"], errors="coerce")
         df["uf"] = df["uf"].str.upper()
         df["ativo"] = df["ativo"].apply(normalize_ativo)
-        
+
         df, df_quarentena = deduplicate_clientes(df)
         logger.info(f"Clientes aprovados (→ Silver): {len(df)}")
 
@@ -132,10 +138,11 @@ def main():
             logger.warning(f"[QUARENTENA] {len(df_quarentena)} clientes salvos em {quarentena_path}")
 
         logger.info("[OK] Tabela de Clientes processada e salva com sucesso na Silver!")
-        
+
     except Exception as e:
         logger.error(f"[ERRO] Erro no processamento de Clientes: {str(e)}")
         raise
+
 
 if __name__ == "__main__":
     main()

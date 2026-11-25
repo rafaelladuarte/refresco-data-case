@@ -1,5 +1,4 @@
 """Acesso ao MinIO/S3: cliente, leitura da Bronze e escrita da Silver e da quarentena."""
-from typing import Optional
 
 import pandas as pd
 import s3fs
@@ -30,7 +29,7 @@ def ensure_bucket(fs: s3fs.S3FileSystem, bucket_name: str) -> bool:
         return False
 
 
-def read_bronze(fs: s3fs.S3FileSystem, table: str) -> Optional[pd.DataFrame]:
+def read_bronze(fs: s3fs.S3FileSystem, table: str) -> pd.DataFrame | None:
     """Lê e concatena todos os CSVs de todas as partições de `bronze/<table>/`.
 
     Retorna None (com warning) se não houver arquivos.
@@ -53,7 +52,7 @@ def read_silver(path: str) -> pd.DataFrame:
     return pd.read_parquet(path, storage_options=s3_storage_options())
 
 
-def _to_parquet(df: pd.DataFrame, path: str, partition_cols: Optional[list] = None) -> None:
+def _to_parquet(df: pd.DataFrame, path: str, partition_cols: list | None = None) -> None:
     df.to_parquet(
         path=path,
         partition_cols=partition_cols,
@@ -64,7 +63,7 @@ def _to_parquet(df: pd.DataFrame, path: str, partition_cols: Optional[list] = No
 
 
 def write_silver(
-    fs: s3fs.S3FileSystem, df: pd.DataFrame, path: str, partition_cols: Optional[list] = None
+    fs: s3fs.S3FileSystem, df: pd.DataFrame, path: str, partition_cols: list | None = None
 ) -> None:
     """Substitui o conteúdo de `path` na Silver pelo DataFrame (rm + escrita em Parquet/snappy)."""
     if fs.exists(path):

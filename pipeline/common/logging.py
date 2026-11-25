@@ -1,4 +1,5 @@
 """Configuração única de logging do pipeline."""
+
 import logging
 
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"

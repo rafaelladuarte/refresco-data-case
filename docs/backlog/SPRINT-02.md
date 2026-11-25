@@ -175,6 +175,15 @@ pipeline/common/
 - O **script e2e** da Sprint 1, que hoje está fora do repositório, vira `scripts/e2e.sh`. Ele é usado pela CI e pode ser rodado localmente.
 - **Badge** de status da CI no topo do README.
 - **Validação:** o PR da Sprint 2 abre com os dois jobs verdes. Um commit de teste com erro proposital de lint e um teste quebrado tem que deixar a CI vermelha.
+- **Resultado da execução:**
+  - **Clima (D2-A):** `tests/fixtures/open_meteo/{2020..2025}.json` são respostas reais da API (2.192 dias, sem nulos). `ClimaConfig.fixture_dir` lê `CLIMA_FIXTURE_DIR`; com ela, `fetch_weather_data_by_year` lê o arquivo do ano e não chama a rede. Ano sem fixture vira `ValueError` e entra no mesmo tratamento de falha parcial. 5 testes novos (178 no total) e o gate segue em 100%.
+  - **Ruff:** `ruff==0.8.6` fixado no `requirements-dev.txt`; configuração no `pyproject.toml` (`E,F,I,B,UP,SIM`, `line-length = 110`, `dbt/`, `notebooks/` e `streamlit/` excluídos). Com a configuração do projeto, o `ruff check` apontou 28 itens (o plano estimava 56 com a configuração global) e o `ruff format --check` pediu mudanças em 21 arquivos. Corrigidos 3 de comportamento (`B904`, `F841`, `E701`), os 3 `SIM117` dos testes e o restante por `--fix` e `ruff format`. A formatação automática tocou 20 arquivos e deve ir num **commit separado** para não poluir os diffs de regra.
+  - **`scripts/e2e.sh`:** o script da Sprint 1 não estava no repositório, então foi reescrito. Sobe MinIO e Postgres descartáveis (portas 19000/15432, `E2E_START_SERVICES=0` na CI), não lê o `.env`, roda Bronze, Silver, `load_stage`, `dbt deps/seed/build` (imagem fixada, `--network host`), `scripts/e2e_verify.py` e o teste da DAG na imagem do Airflow. Para isso o `dbt/profiles.yml` passou a ler `POSTGRES_HOST`/`POSTGRES_PORT` (com os padrões antigos). O container do dbt roda com o UID do host.
+  - **Execução local do e2e:** `dbt build` com **91 PASS** (2 seeds, modelos e testes), fato = **3.482**, quarentenas **18/5**, receita total **R$ 597.343,23**, Q4 sem margem para produtos sem custo, DAG **4/4**.
+  - **Achado no próprio e2e:** o teste da DAG era *pulado* (não falhava) quando o Airflow não era importável, e o job passaria verde sem testar nada. Com `REQUIRE_AIRFLOW=1` (definido pelo `e2e.sh`) a ausência do Airflow agora é erro.
+  - **`.github/workflows/ci.yml`:** jobs `lint-unit` (`ruff check`, `ruff format --check`, `pytest tests/unit --cov` com o gate, `coverage.xml` como artefato) e `e2e` (MinIO e Postgres como *service containers*), com `concurrency` e `timeout-minutes`. Badge no topo do README, seções "Teste ponta a ponta" e "CI" em "Como rodar os testes".
+  - **Teste negativo local:** com um import não usado, um arquivo mal formatado e um teste quebrado, `ruff check`, `ruff format --check` e `pytest` saem com código 1; revertido, os três voltam a passar.
+  - **Pendente:** a execução no GitHub Actions só acontece quando o PR for aberto (Fase 6). Lá é preciso confirmar o `bitnamilegacy/minio` como *service container* (risco previsto na seção 6) e repetir o commit de teste com erro proposital.
 
 ---
 

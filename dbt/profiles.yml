@@ -2,8 +2,8 @@ refresco_dbt:
   outputs:
     dev:
       type: postgres
-      host: "postgres-gold"
-      port: 5432
+      host: "{{ env_var('POSTGRES_HOST', 'postgres-gold') }}"
+      port: "{{ env_var('POSTGRES_PORT', '5432') | as_number }}"
       user: "{{ env_var('POSTGRES_USER') }}"
       pass: "{{ env_var('POSTGRES_PASSWORD') }}"
       dbname: "{{ env_var('POSTGRES_DB') }}"

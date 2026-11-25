@@ -6,11 +6,13 @@ from pipeline.silver.clean_produtos import flag_valores_indisponiveis
 
 def produtos(custos, precos=None):
     precos = precos if precos is not None else [5.0] * len(custos)
-    return pd.DataFrame({
-        "id_produto": [f"P{i:03d}" for i in range(1, len(custos) + 1)],
-        "custo_unitario": custos,
-        "preco_tabela": precos,
-    })
+    return pd.DataFrame(
+        {
+            "id_produto": [f"P{i:03d}" for i in range(1, len(custos) + 1)],
+            "custo_unitario": custos,
+            "preco_tabela": precos,
+        }
+    )
 
 
 class TestFlagValoresIndisponiveis:

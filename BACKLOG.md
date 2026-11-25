@@ -60,10 +60,10 @@ A Sprint 1 já centralizou as credenciais (`pipeline/settings.py`) e a limpeza d
 `eng-software` · 🔴 Alta · `M`
 
 - **Critérios de aceite:**
-  - [ ] Lint e format com `ruff` (configuração versionada no `pyproject.toml`)
-  - [ ] `pytest` com relatório de cobertura
-  - [ ] Job e2e: MinIO + Postgres como service containers, pipeline Python sobre `data/raw` e `dbt build` (seeds, modelos e testes)
-  - [ ] Badge de status no README
+  - [x] Lint e format com `ruff` (configuração versionada no `pyproject.toml`)
+  - [x] `pytest` com relatório de cobertura
+  - [x] Job e2e: MinIO + Postgres como service containers, pipeline Python sobre `data/raw` e `dbt build` (seeds, modelos e testes)
+  - [x] Badge de status no README
 
 ### MOD-02 · Endurecer os testes dbt
 `qualidade-dados` · 🟠 Média · `P`

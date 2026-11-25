@@ -3,6 +3,7 @@
 Credenciais nunca têm valor padrão: se a variável não existir, a execução falha
 com uma mensagem explícita em vez de seguir com uma senha embutida no código.
 """
+
 import os
 from dataclasses import dataclass
 
@@ -21,6 +22,7 @@ def require_env(name: str) -> str:
 @dataclass(frozen=True)
 class S3Config:
     """Conexão com o MinIO/S3."""
+
     access_key: str
     secret_key: str
     endpoint_url: str
@@ -45,6 +47,7 @@ class S3Config:
 @dataclass(frozen=True)
 class PostgresConfig:
     """Conexão com o PostgreSQL da camada Gold."""
+
     user: str
     password: str
     db: str
@@ -69,11 +72,15 @@ class PostgresConfig:
 @dataclass(frozen=True)
 class ClimaConfig:
     """Parâmetros da ingestão climática, lidos do ambiente (sem segredos)."""
+
     api_url: str
     latitude: float
     longitude: float
     ano_inicio: int
     ano_fim: int
+    # Somente CI/testes: diretório com respostas gravadas da API ({ano}.json). Quando
+    # definido, a ingestão lê os arquivos em vez de chamar a rede.
+    fixture_dir: str | None = None
 
     @classmethod
     def from_env(cls) -> "ClimaConfig":
@@ -84,6 +91,7 @@ class ClimaConfig:
             longitude=float(os.getenv("CLIMA_LONGITUDE", "-48.2772")),
             ano_inicio=int(os.getenv("CLIMA_ANO_INICIO", "2020")),
             ano_fim=int(os.getenv("CLIMA_ANO_FIM", "2025")),
+            fixture_dir=os.getenv("CLIMA_FIXTURE_DIR") or None,
         )
         if config.ano_inicio > config.ano_fim:
             raise ValueError(

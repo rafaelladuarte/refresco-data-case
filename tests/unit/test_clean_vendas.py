@@ -75,7 +75,10 @@ class TestValidateVendas:
         "override, esperado",
         [
             ({"id_venda": ""}, "id_venda vazio"),
-            ({"data_emissao": pd.NaT, "data_emissao_original": "31/02/2024"}, "data_emissao inválida: '31/02/2024'"),
+            (
+                {"data_emissao": pd.NaT, "data_emissao_original": "31/02/2024"},
+                "data_emissao inválida: '31/02/2024'",
+            ),
             ({"data_emissao": pd.NaT, "data_emissao_original": None}, "data_emissao inválida: '<nulo>'"),
             ({"qtd_caixas": 0}, "qtd_caixas deve ser > 0: '0'"),
             ({"qtd_caixas": -3}, "qtd_caixas deve ser > 0: '-3'"),
@@ -113,11 +116,15 @@ class TestValidateVendas:
     def test_cadastro_de_referencia_tambem_e_normalizado(self):
         df = pd.DataFrame([venda()])
         df["data_emissao_original"] = df["data_emissao_original"].astype("string")
-        ok, _ = validate_vendas(df, pd.DataFrame({"id_cliente": [" c0001"]}), pd.DataFrame({"id_produto": ["p001 "]}))
+        ok, _ = validate_vendas(
+            df, pd.DataFrame({"id_cliente": [" c0001"]}), pd.DataFrame({"id_produto": ["p001 "]})
+        )
         assert len(ok) == 1
 
     def test_separa_aprovadas_e_rejeitadas_sem_perder_linhas(self):
-        ok, quarentena = validar(venda(id_venda="V1"), venda(id_venda="V2", qtd_caixas=0), venda(id_venda="V3"))
+        ok, quarentena = validar(
+            venda(id_venda="V1"), venda(id_venda="V2", qtd_caixas=0), venda(id_venda="V3")
+        )
         assert ok["id_venda"].tolist() == ["V1", "V3"]
         assert quarentena["id_venda"].tolist() == ["V2"]
 

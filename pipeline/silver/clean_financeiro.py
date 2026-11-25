@@ -8,10 +8,20 @@ logger = get_logger(__name__)
 
 # Variações de tipo_lancamento na origem (já em maiúsculas e sem pontos) → domínio padrão
 MAP_TIPO_LANCAMENTO = {
-    "VENDA": "VENDA", "VENDAS": "VENDA", "VND": "VENDA", "V": "VENDA",
-    "DEVOLUCAO": "DEVOLUCAO", "DEV": "DEVOLUCAO", "DEVOL": "DEVOLUCAO", "D": "DEVOLUCAO", "DEVOLUÇÃO": "DEVOLUCAO",
-    "BONIFICACAO": "BONIFICACAO", "BONIF": "BONIFICACAO", "BONIFICAÇÃO": "BONIFICACAO",
-    "AJUSTE": "AJUSTE", "OUTRO": "OUTRO",
+    "VENDA": "VENDA",
+    "VENDAS": "VENDA",
+    "VND": "VENDA",
+    "V": "VENDA",
+    "DEVOLUCAO": "DEVOLUCAO",
+    "DEV": "DEVOLUCAO",
+    "DEVOL": "DEVOLUCAO",
+    "D": "DEVOLUCAO",
+    "DEVOLUÇÃO": "DEVOLUCAO",
+    "BONIFICACAO": "BONIFICACAO",
+    "BONIF": "BONIFICACAO",
+    "BONIFICAÇÃO": "BONIFICACAO",
+    "AJUSTE": "AJUSTE",
+    "OUTRO": "OUTRO",
 }
 MAP_STATUS = {"PAGO": "PAGO", "PENDENTE": "PENDENTE", "CANCELADO": "CANCELADO"}
 
@@ -35,14 +45,14 @@ def parse_competencia(series: pd.Series) -> pd.Series:
 
 def main():
     logger.info("Iniciando processamento Silver para Financeiro")
-    
+
     try:
         fs = get_s3_client()
         df = read_bronze(fs, "financeiro")
         if df is None:
             return
         logger.info(f"Linhas lidas da Bronze: {len(df)}")
-        
+
         df["_ingested_at"] = pd.to_datetime(df["_ingested_at"], errors="coerce")
         for col in ["valor_bruto", "valor_imposto", "valor_liquido"]:
             df[col] = pd.to_numeric(df[col], errors="coerce")
@@ -52,23 +62,31 @@ def main():
 
         df = df.sort_values("_ingested_at").drop_duplicates(subset=["id_financeiro"], keep="last")
 
-        df['ano'] = df['competencia'].dt.year
-        df['mes'] = df['competencia'].dt.month
-        
-        df_silver = df[[
-            "id_financeiro", "id_venda", "tipo_lancamento_padrao", 
-            "competencia", "status_padrao", "ano", "mes"
-        ]].copy()
+        df["ano"] = df["competencia"].dt.year
+        df["mes"] = df["competencia"].dt.month
+
+        df_silver = df[
+            [
+                "id_financeiro",
+                "id_venda",
+                "tipo_lancamento_padrao",
+                "competencia",
+                "status_padrao",
+                "ano",
+                "mes",
+            ]
+        ].copy()
         df_silver = df_silver.dropna(subset=["ano", "mes"])
-        
+
         logger.info(f"Deduplicação concluída. Linhas finais: {len(df_silver)}")
-        
+
         write_silver(fs, df_silver, "s3://silver/financeiro/", partition_cols=["ano", "mes"])
         logger.info("[OK] Tabela de Financeiro processada e salva com sucesso na Silver!")
-        
+
     except Exception as e:
         logger.error(f"[ERRO] Erro no processamento de Financeiro: {str(e)}")
         raise
+
 
 if __name__ == "__main__":
     main()
