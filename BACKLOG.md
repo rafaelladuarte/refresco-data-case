@@ -119,8 +119,8 @@ Hoje cada execução grava uma partição com `datetime.now()` e a Silver relê 
 O padrão `fs.rm()` seguido de `to_parquet()` deixa a Silver vazia ou parcial se a escrita falhar.
 
 - **Critérios de aceite:**
-  - [ ] Escrita em prefixo temporário (`_tmp/<run_id>/`) e troca no final
-  - [ ] Falha no meio da escrita preserva a versão anterior
+  - [x] Escrita em prefixo temporário (`_tmp/<run_id>/`) e troca no final
+  - [x] Falha no meio da escrita preserva a versão anterior
 
 ### ARQ-03 · Carga em `load_stage` com DDL explícita e `COPY`
 `eng-software` · 🟠 Média · `M`

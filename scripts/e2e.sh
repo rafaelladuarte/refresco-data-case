@@ -132,6 +132,9 @@ dbt build
 log "Verificação dos números de referência"
 "$PYTHON" scripts/e2e_verify.py
 
+log "Escrita atômica contra o MinIO real (falhas injetadas)"
+"$PYTHON" scripts/e2e_atomic_check.py
+
 # Fingerprint: o conteúdo de cada dataset do dia 1 precisa ser idêntico ao baseline versionado.
 # Só muda por decisão explícita (E2E_UPDATE_BASELINE=1), justificada no commit.
 log "Fingerprint dos datasets (dia 1)"
