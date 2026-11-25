@@ -236,6 +236,14 @@ Nenhuma variável nova no `.env`. Mudanças:
 6. Os números de referência da Sprint 2 (3.482 / 18 / 5 / 75 testes dbt / R$ 597.343,23) inalterados.
 7. README atualizado (backfill, lookback, limpeza das partições antigas, `audit.dq_results`).
 
+**Resultado da validação no ambiente real (25/11/2026).** A DAG rodou no Airflow real, sobre um ambiente com estado da Sprint 2 (Silver, `load_stage` e fato antigos), com o run `execucao_completa`: **13 de 13 tasks verdes**. O ambiente antigo expôs três falhas de **migração** que o e2e, que sempre parte do zero, não podia ver. As três foram corrigidas, com teste:
+
+1. `clean_financeiro_silver`: a Silver de financeiro antiga não tinha a coluna `_ingested_at`, e o merge falhava com `KeyError`. O merge agora aceita a ausência (`merge._com_controle`).
+2. `load_to_staging`: a Silver de vendas antiga ainda trazia `receita_liquida` (movida para o dbt no ARQ-04), e a validação de schema do carregador a barrou. O merge agora descarta colunas que o código deixou de produzir.
+3. `dbt_run_gold`: a `fato_vendas` antiga não tinha `atualizado_em`, e o filtro incremental referenciava a coluna numa subconsulta (o Postgres a lia como coluna da consulta externa e falhava). O modelo agora detecta a ausência da coluna e reprocessa tudo uma vez. O e2e passou a simular essa fato antiga (`drop column`) antes do `dbt build` do dia 2.
+
+Ainda não executados no ambiente real: `airflow dags backfill` de várias datas e a CI no GitHub.
+
 **Definição de pronto de cada card:** critérios do `BACKLOG.md` marcados, testes cobrindo a mudança, e2e com os números de referência e fingerprints conferidos, commit próprio com o ID do card.
 
 ---

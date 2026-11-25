@@ -127,6 +127,24 @@ class TestMergeState:
         assert resultado["_logical_date"].notna().all()
         assert changed_at(resultado)["a"] == T1  # linha antiga sem mudança mantém o _changed_at
 
+    def test_silver_antiga_sem_ingested_at_tambem_e_aceita(self):
+        """A Silver de financeiro anterior ao ARQ-01 não tinha `_ingested_at` (achado no ambiente real)."""
+        legado = pd.DataFrame({"id": ["a", "b"], "valor": ["1", "2"]})
+        resultado = merge.merge_state(legado, lote("2026-01-02", T2, b="2-novo", c="3"), KEY)
+        assert dados(resultado) == {"a": "1", "b": "2-novo", "c": "3"}
+        assert resultado["_ingested_at"].notna().all()
+        assert changed_at(resultado)["a"] == pd.Timestamp(0)  # sem mudança: mantém a data mínima
+        assert changed_at(resultado)["b"] == T2  # alterada: avança
+
+    def test_coluna_que_o_codigo_deixou_de_produzir_sai_do_estado(self):
+        """A Silver de vendas anterior ao ARQ-04 ainda tinha `receita_liquida` (achado no ambiente real)."""
+        legado = merge.merge_state(None, lote("2026-01-01", T1, a="1", b="2"), KEY).assign(
+            receita_liquida=9.9
+        )
+        resultado = merge.merge_state(legado, lote("2026-01-02", T2, b="2-novo"), KEY)
+        assert "receita_liquida" not in resultado.columns
+        assert dados(resultado) == {"a": "1", "b": "2-novo"}
+
     def test_nao_altera_os_dataframes_de_entrada(self):
         atual = merge.merge_state(None, lote("2026-01-01", T1, a="1"), KEY)
         novo = lote("2026-01-02", T2, a="2")

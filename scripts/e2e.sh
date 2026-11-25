@@ -179,6 +179,22 @@ if [[ "$DAY2" == "1" ]]; then
   dbt run --select fato_vendas --vars '{lookback_days: 100000}'
   "$PYTHON" scripts/e2e_lookback_check.py depois "$WORKDIR/mudancas.json"
 
+  # Fato criada antes do MOD-01 (sem `atualizado_em`): o incremental reprocessa tudo e recria a coluna
+  log "Fato antiga (sem atualizado_em): o incremental reprocessa tudo e recria a coluna"
+  "$PYTHON" -c "
+from sqlalchemy import create_engine, text
+from pipeline.common.config import postgres_url
+with create_engine(postgres_url()).begin() as c:
+    c.execute(text('alter table gold.fato_vendas drop column atualizado_em'))"
+  dbt run --select fato_vendas
+  "$PYTHON" -c "
+from sqlalchemy import create_engine, text
+from pipeline.common.config import postgres_url
+with create_engine(postgres_url()).connect() as c:
+    total, com = c.execute(text('select count(*), count(atualizado_em) from gold.fato_vendas')).one()
+print(f'[{\"OK\" if (total, com) == (3483, 3483) else \"FALHA\"}] fato antiga: linhas={total} com atualizado_em={com} esperado=3483/3483')
+raise SystemExit(0 if (total, com) == (3483, 3483) else 1)"
+
   # Idempotência e backfill fora de ordem (ARQ-01). O estado atual (dia 2) é a referência.
   log "Fingerprint do estado após o dia 2"
   "$PYTHON" scripts/fingerprint.py gerar "$WORKDIR/fingerprint_dia2.json"

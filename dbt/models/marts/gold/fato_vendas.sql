@@ -19,8 +19,8 @@
        `atualizado_em`. Mudança de dimensão em venda mais antiga que a janela só chega com
        `dbt run --full-refresh --select fato_vendas+` ou com `--vars '{lookback_days: <dias>}'`.
 
-  Na primeira execução depois deste modelo ganhar `atualizado_em`, as linhas antigas têm NULL nele:
-  o max() ignora NULL e tudo é reprocessado uma vez.
+  Numa fato criada antes deste modelo ganhar `atualizado_em`, a coluna não existe: o filtro é omitido
+  e tudo é reprocessado uma vez (o `append_new_columns` cria a coluna).
 -#}
 
 with vendas as (
@@ -111,6 +111,12 @@ left join regras_tipo rt
     on v.tipo_lancamento = rt.tipo_lancamento
 
 {% if is_incremental() %}
+{#- Fato criada antes do MOD-01 ainda não tem `atualizado_em`: sem o filtro, tudo é reprocessado uma vez e
+    o `append_new_columns` cria a coluna. (Referenciá-la na subconsulta falharia: o Postgres a leria como
+    coluna da consulta externa.) -#}
+{% set colunas_da_fato = adapter.get_columns_in_relation(this) | map(attribute='name') | list %}
+{% if 'atualizado_em' in colunas_da_fato %}
 where v.atualizado_em > (select coalesce(max(atualizado_em), '1900-01-01') from {{ this }})
    or v.data_emissao >= current_date - {{ var('lookback_days', 30) }}
+{% endif %}
 {% endif %}

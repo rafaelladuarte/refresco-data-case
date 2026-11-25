@@ -27,7 +27,7 @@ Pipeline de dados **Bronze → Silver → Gold** que transforma arquivos de vend
 
 Capturas da aplicação em um ambiente recriado do zero (`docker compose down -v`).
 
-**Airflow: DAG `dag_etl_pipeline` com todas as tasks concluídas** (a captura é de uma versão anterior, com a task extra `dbt_run_staging`; hoje as views `stg_*` são recriadas dentro da `dbt_run_gold`, e a DAG tem 13 tasks). Bronze e Silver rodam com `PythonOperator`; o dbt roda em containers efêmeros via `DockerOperator`.
+**Airflow: DAG `dag_etl_pipeline` com as 13 tasks concluídas.** Bronze e Silver rodam com `PythonOperator`; o dbt roda em containers efêmeros via `DockerOperator`.
 
 ![DAG no Airflow: grafo de tasks](docs/images/airflow_dag_graph.png)
 

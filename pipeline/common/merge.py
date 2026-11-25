@@ -15,7 +15,8 @@ Regras do merge, por chave natural:
   3. `_changed_at` é preservado quando o hash da versão vencedora é igual ao do estado atual.
      Como cada dia reingere o snapshot inteiro, é isso que torna o incremental do dbt realmente
      incremental (D3 da Sprint 3);
-  4. linha que some da origem permanece na Silver: o merge nunca apaga.
+  4. linha que some da origem permanece na Silver: o merge nunca apaga;
+  5. coluna que o código deixou de produzir sai do estado (evolução de schema).
 """
 
 import pandas as pd
@@ -52,9 +53,11 @@ def _com_controle(atual: pd.DataFrame) -> pd.DataFrame:
     """Silver gravada antes do ARQ-01 não tem as colunas de controle: completa sem perder dados.
 
     Toda linha antiga recebe a data lógica mais antiga possível (qualquer partição nova a supera) e
-    `_changed_at` = `_ingested_at`.
+    `_changed_at` = `_ingested_at`. Se a tabela antiga nem tinha `_ingested_at`, vale 1970-01-01.
     """
     atual = atual.copy()
+    if "_ingested_at" not in atual:  # ex.: a Silver de financeiro não guardava a coluna
+        atual["_ingested_at"] = pd.Timestamp(0)
     if "_logical_date" not in atual:
         atual["_logical_date"] = "0000-00-00"
     if "_row_hash" not in atual:
@@ -78,6 +81,10 @@ def merge_state(atual: pd.DataFrame | None, novo: pd.DataFrame, key: list[str]) 
         return novo.sort_values(key, kind="mergesort").reset_index(drop=True)
 
     atual = _datas_em_ns(_com_controle(atual))
+    # Coluna que o código deixou de produzir (ex.: `receita_liquida`, movida para o dbt) sai do estado,
+    # senão a Silver antiga a carregaria para sempre.
+    obsoletas = [c for c in atual.columns if c not in novo.columns and c != "_origem"]
+    atual = atual.drop(columns=obsoletas)
     atual["_origem"] = 0
     novo["_origem"] = 1  # empate total: a linha da execução corrente vence
 
