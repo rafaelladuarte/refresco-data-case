@@ -22,7 +22,10 @@ renamed as (
         cast(qtd_caixas as integer) as qtd_caixas,
         cast(preco_unitario as numeric(10,2)) as preco_unitario,
         cast(desconto_pct as numeric(6,4)) as desconto_pct,
-        cast(receita_liquida as numeric(12,2)) as receita_liquida,
+        -- receita_liquida = qtd_caixas x preco_unitario x (1 - desconto_pct), arredondada em 2 casas.
+        -- Calculada a partir das colunas cruas (double precision), não das já arredondadas acima,
+        -- na mesma ordem de operações que o pandas usava: o resultado é idêntico bit a bit.
+        cast(qtd_caixas * preco_unitario * (1 - coalesce(desconto_pct, 0)) as numeric(12,2)) as receita_liquida,
         
         -- metadados
         cast(_ingested_at as timestamp) as ingested_at,

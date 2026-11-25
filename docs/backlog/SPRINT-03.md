@@ -1,6 +1,6 @@
 # Sprint 3: Pipeline robusto
 
-> **Status:** 🟢 Aprovado em 25/11/2026 (todas as decisões conforme as recomendações) · em execução
+> **Status:** 🟢 Aprovado em 25/11/2026 (todas as decisões conforme as recomendações) · **cards implementados**; falta a validação final (seção 5): CI no PR, DAG e backfill no ambiente real
 > **Escopo:** os 6 cards da coluna "Sprint 3" do [`BACKLOG.md`](../../BACKLOG.md): ARQ-01, ARQ-02, ARQ-03, ARQ-05, MOD-01 e ARQ-04
 > **Objetivo:** atacar as causas raiz vistas na validação da Sprint 1: execução idempotente, escrita atômica, carga tipada, incremental correto e auditoria de qualidade.
 
@@ -207,6 +207,12 @@ Fase 6 – Validação          PR com a CI verde + DAG no ambiente real + backf
 - **`clean_vendas.py`** deixa de calcular `receita_liquida`; `stg_vendas` calcula `round(qtd_caixas * preco_unitario * (1 - desconto_pct), 2)` (D7).
 - **`schema.yml`** documenta as fórmulas de `receita_liquida`, `custo_total` e `margem_bruta`.
 - **Validação:** receita total R$ 597.343,23 e o teste de reconciliação continuam passando; `vw_q1..vw_q4` inalteradas contra o baseline.
+- **Resultado da execução:**
+  - **Silver só limpa, tipa e valida:** `clean_vendas.py` deixou de calcular `receita_liquida`, e a coluna saiu da DDL de `load_stage.vendas` (a carga recria a tabela uma vez em ambientes antigos, como no ARQ-03).
+  - **`stg_vendas` é a única definição da métrica:** `cast(qtd_caixas * preco_unitario * (1 - coalesce(desconto_pct, 0)) as numeric(12,2))`. A fórmula usa as colunas **cruas** (`double precision`), não as já arredondadas do staging, na mesma ordem de operações do pandas; por isso o resultado é idêntico bit a bit. Calcular a partir de `numeric(10,2)` e `numeric(6,4)` poderia mudar centavos nas bordas de arredondamento.
+  - **Documentação no `schema.yml`:** fórmulas de `receita_liquida`, `custo_total` e `margem_bruta`. Testes novos em `stg_vendas.receita_liquida` (`not_null` e `>= 0`): `dbt build` com 94 itens.
+  - **Baseline regravado de propósito:** primeiro rodei **sem** regravar, e o fingerprint apontou exatamente 3 datasets de 31 (`silver/vendas`, `load_stage.vendas` e `quarentena/vendas`), todos com as mesmas linhas (3.482, 3.482 e 18). Os outros 28 ficaram idênticos, **incluindo toda a Gold** (fato, dimensões, `vw_q1..vw_q4` e a própria view `stg_vendas`). Depois da regravação, o `git diff` do baseline mostra só a remoção da coluna `receita_liquida` nessas 3 entradas.
+  - **Receita total inalterada** (R$ 597.343,23); dia 2, lookback, idempotência e backfill fora de ordem seguem passando (31 datasets idênticos), e o teste da DAG passou (17 testes). 297 testes unitários.
 
 ---
 

@@ -152,8 +152,8 @@ def main(ds: str | None = None, run_id: str | None = None):
         for col in ["qtd_caixas", "preco_unitario", "desconto_pct"]:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
-        receita_bruta = df["qtd_caixas"] * df["preco_unitario"]
-        df["receita_liquida"] = receita_bruta * (1 - df["desconto_pct"].fillna(0))
+        # A Silver só limpa, tipa e valida. `receita_liquida` e as demais métricas são calculadas no dbt
+        # (stg_vendas), para a regra de negócio morar em um único lugar (ARQ-04).
 
         df["_ingested_at"] = pd.to_datetime(df["_ingested_at"], errors="coerce")
         # Ordenação estável: em empate de _ingested_at o resultado é determinístico

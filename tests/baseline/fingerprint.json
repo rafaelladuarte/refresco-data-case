@@ -303,11 +303,10 @@
       "mes",
       "preco_unitario",
       "qtd_caixas",
-      "receita_liquida",
       "representante"
     ],
     "linhas": 3482,
-    "sha256": "ccff0d4a40eefc52a4d33e4d0856552dce7286ef197b827bb08620eca7f601aa"
+    "sha256": "dce10ffe27d4ac3460b93b71ce801eb891192f9bb1b62326db2db20892a0537c"
   },
   "quarentena/clientes": {
     "colunas": [
@@ -364,11 +363,10 @@
       "motivo_rejeicao",
       "preco_unitario",
       "qtd_caixas",
-      "receita_liquida",
       "representante"
     ],
     "linhas": 18,
-    "sha256": "abcc54731a921adca09dfcc579dbbbc06366e17e23208cf0b2d5e99d00bb0239"
+    "sha256": "a1ad7359b21a01655e493bec18aa4f6b9c155fc369cc8aa639614e9d823f0708"
   },
   "silver/clientes": {
     "colunas": [
@@ -441,10 +439,9 @@
       "mes",
       "preco_unitario",
       "qtd_caixas",
-      "receita_liquida",
       "representante"
     ],
     "linhas": 3482,
-    "sha256": "ccff0d4a40eefc52a4d33e4d0856552dce7286ef197b827bb08620eca7f601aa"
+    "sha256": "dce10ffe27d4ac3460b93b71ce801eb891192f9bb1b62326db2db20892a0537c"
   }
 }

@@ -150,8 +150,8 @@ O filtro `data_emissao > max(data_emissao)` perde vendas retroativas e atualiza�
 `receita_liquida` é calculada no pandas e `margem_bruta` no dbt.
 
 - **Critérios de aceite:**
-  - [ ] Silver só limpa e tipa; todas as métricas são calculadas no dbt
-  - [ ] Fórmulas documentadas no `schema.yml`
+  - [x] Silver só limpa e tipa; todas as métricas são calculadas no dbt
+  - [x] Fórmulas documentadas no `schema.yml`
 
 ### ARQ-05 · Quarentena genérica e tabela de auditoria
 `qualidade-dados` · 🟠 Média · `M`

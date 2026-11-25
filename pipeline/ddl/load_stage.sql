@@ -57,7 +57,6 @@ CREATE TABLE IF NOT EXISTS load_stage.vendas (
     desconto_pct double precision,
     representante text,
     canal_venda text,
-    receita_liquida double precision,
     ano integer,
     mes integer,
     _ingested_at timestamp,
