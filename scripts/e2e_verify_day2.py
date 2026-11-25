@@ -14,7 +14,7 @@ import sys
 from sqlalchemy import create_engine, text
 
 from pipeline.common.config import postgres_url
-from pipeline.common.storage import read_silver
+from pipeline.common.storage import quarantine_path, read_silver
 
 # MOD-01 (Sprint 3): o incremental da fato ainda filtra por data_emissao, então perde a venda
 # retroativa e a mudança de status. Remover estes nomes quando o MOD-01 for implementado.
@@ -32,6 +32,7 @@ def main(caminho: str) -> int:
     with open(caminho, encoding="utf-8") as f:
         m = json.load(f)
     enforcar_pendentes = os.environ.get("E2E_ENFORCE_PENDING") == "1"
+    ds = os.environ["E2E_DS"]  # data lógica do dia 2 (a quarentena é por data)
 
     engine = create_engine(postgres_url())
     with engine.connect() as conn:
@@ -55,8 +56,8 @@ def main(caminho: str) -> int:
         ("fato reflete o novo status financeiro", status, m["status_novo"]),
         ("fato contém a venda retroativa", retroativa, 1),
         ("demais vendas da fato inalteradas (contagem)", fato_sem_nova, 3482),
-        ("quarentena de vendas inalterada", len(read_silver("s3://silver/_quarentena/vendas/")), 18),
-        ("quarentena de clientes inalterada", len(read_silver("s3://silver/_quarentena/clientes/")), 5),
+        ("quarentena de vendas inalterada", len(read_silver(quarantine_path("vendas", ds))), 18),
+        ("quarentena de clientes inalterada", len(read_silver(quarantine_path("clientes", ds))), 5),
     ]
 
     falhas = []

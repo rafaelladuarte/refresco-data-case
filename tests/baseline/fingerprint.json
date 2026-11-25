@@ -326,6 +326,31 @@
     "linhas": 5,
     "sha256": "7b3aa973c6f0d70dde62967c38e551d0be4e0efc11f48ef6a2062ae4a06059a2"
   },
+  "quarentena/clima": {
+    "ausente": true
+  },
+  "quarentena/financeiro": {
+    "colunas": [
+      "_source_file",
+      "competencia",
+      "competencia_original",
+      "id_financeiro",
+      "id_venda",
+      "motivo_rejeicao",
+      "status",
+      "status_padrao",
+      "tipo_lancamento",
+      "tipo_lancamento_padrao",
+      "valor_bruto",
+      "valor_imposto",
+      "valor_liquido"
+    ],
+    "linhas": 10,
+    "sha256": "d7b88178e8194bab06fb3cfdc85294abad2cf4287e8852b735a39608aa0a1950"
+  },
+  "quarentena/produtos": {
+    "ausente": true
+  },
   "quarentena/vendas": {
     "colunas": [
       "_source_file",

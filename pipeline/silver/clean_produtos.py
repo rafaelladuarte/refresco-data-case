@@ -2,10 +2,17 @@ import sys
 
 import pandas as pd
 
+from pipeline.common.audit import record_dq
 from pipeline.common.logging import get_logger
 from pipeline.common.logical_date import resolve_ds
 from pipeline.common.merge import merge_state
-from pipeline.common.storage import get_s3_client, read_bronze, read_silver_state, write_silver
+from pipeline.common.storage import (
+    get_s3_client,
+    read_bronze,
+    read_silver_state,
+    write_quarantine,
+    write_silver,
+)
 from pipeline.common.validators import PATTERN_ID_PRODUTO, clean_text, normalize_id
 
 logger = get_logger(__name__)
@@ -33,7 +40,21 @@ def flag_valores_indisponiveis(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def main(ds: str | None = None):
+def validate_produtos(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Rejeita produtos com `id_produto` fora do padrão (vazio, formato inválido).
+
+    Espera `id_produto` já normalizado (`normalize_id`). Retorna (aprovados, quarentena), esta com a
+    coluna `motivo_rejeicao`.
+    """
+    invalido = ~df["id_produto"].str.match(PATTERN_ID_PRODUTO)
+    quarentena = df[invalido].copy()
+    quarentena["motivo_rejeicao"] = quarentena["id_produto"].map(
+        lambda valor: f"id_produto inválido ou vazio: '{valor}'"
+    )
+    return df[~invalido].copy(), quarentena.reset_index(drop=True)
+
+
+def main(ds: str | None = None, run_id: str | None = None):
     ds = resolve_ds(ds)
     logger.info(f"Iniciando processamento Silver para Produtos (partição {ds})")
 
@@ -42,7 +63,8 @@ def main(ds: str | None = None):
         df = read_bronze(fs, "produtos", ds)
         if df is None:
             raise FileNotFoundError(f"Partição Bronze de produtos não encontrada para {ds}")
-        logger.info(f"Linhas lidas da Bronze: {len(df)}")
+        lidas = len(df)
+        logger.info(f"Linhas lidas da Bronze: {lidas}")
 
         for col in ["nome_produto", "familia", "marca", "embalagem"]:
             df[col] = clean_text(df[col])
@@ -71,14 +93,12 @@ def main(ds: str | None = None):
         # Normaliza id_produto: remove espaços e descarta formatos inválidos
         df["id_produto"] = normalize_id(df["id_produto"])
 
-        mask_id_invalido = ~df["id_produto"].str.match(PATTERN_ID_PRODUTO)
-        df_id_invalido = df[mask_id_invalido].copy()
-        if not df_id_invalido.empty:
+        df, df_quarentena = validate_produtos(df)
+        if not df_quarentena.empty:
             logger.warning(
-                f"{len(df_id_invalido)} produtos com id_produto inválido ou vazio descartados: "
-                f"{sorted(df_id_invalido['id_produto'].unique().tolist())}"
+                f"{len(df_quarentena)} produtos com id_produto inválido ou vazio rejeitados: "
+                f"{sorted(df_quarentena['id_produto'].unique().tolist())}"
             )
-        df = df[~mask_id_invalido].copy()
 
         df = df.sort_values("_ingested_at").drop_duplicates(subset=["id_produto"], keep="last")
         logger.info(f"Deduplicação concluída. Linhas finais: {len(df)}")
@@ -89,8 +109,14 @@ def main(ds: str | None = None):
             if sem_valor:
                 logger.warning(f"{len(sem_valor)} produtos sem {col} válido ({flag}=false): {sem_valor}")
 
+        aprovadas = len(df)
         df = merge_state(read_silver_state(fs, SILVER_PATH), df, key=["id_produto"])
         write_silver(fs, df, SILVER_PATH)
+
+        quarentena_path = write_quarantine(fs, df_quarentena, "produtos", ds)
+        if not df_quarentena.empty:
+            logger.warning(f"[QUARENTENA] {len(df_quarentena)} produtos salvos em {quarentena_path}")
+        record_dq("produtos", ds, run_id, lidas, aprovadas, df_quarentena)
         logger.info("[OK] Tabela de Produtos salva com sucesso em silver/produtos/!")
 
     except Exception as e:
@@ -99,4 +125,4 @@ def main(ds: str | None = None):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else None)
+    main(*sys.argv[1:3])

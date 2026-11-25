@@ -2,6 +2,7 @@ import sys
 
 import pandas as pd
 
+from pipeline.common.audit import record_dq
 from pipeline.common.logging import get_logger
 from pipeline.common.logical_date import resolve_ds
 from pipeline.common.merge import merge_state
@@ -115,7 +116,7 @@ def validate_vendas(
     return df_ok, df_quarentena
 
 
-def main(ds: str | None = None):
+def main(ds: str | None = None, run_id: str | None = None):
     ds = resolve_ds(ds)
     logger.info(f"Iniciando processamento Silver para Vendas (partição {ds})")
 
@@ -128,7 +129,8 @@ def main(ds: str | None = None):
         df = read_bronze(fs, "vendas", ds)
         if df is None:
             raise FileNotFoundError(f"Partição Bronze de vendas não encontrada para {ds}")
-        logger.info(f"Linhas lidas da Bronze: {len(df)}")
+        lidas = len(df)
+        logger.info(f"Linhas lidas da Bronze: {lidas}")
 
         # ------------------------------------------------------------------
         # 2. Normalização de strings antes de qualquer validação
@@ -192,15 +194,17 @@ def main(ds: str | None = None):
 
         # Persiste a quarentena para auditoria e reprocessamento manual. A da execução
         # anterior é removida mesmo que a atual venha vazia.
-        quarentena_path = write_quarantine(fs, df_quarentena, "vendas")
+        quarentena_path = write_quarantine(fs, df_quarentena, "vendas", ds)
         if not df_quarentena.empty:
             logger.warning(f"[QUARENTENA] {len(df_quarentena)} registros salvos em {quarentena_path}")
 
         # ------------------------------------------------------------------
         # 6. Salva apenas registros íntegros na Silver
         # ------------------------------------------------------------------
+        aprovadas = len(df_ok)
         df_ok = merge_state(read_silver_state(fs, SILVER_PATH), df_ok, key=["id_venda"])
         write_silver(fs, df_ok, SILVER_PATH, partition_cols=["ano", "mes"])
+        record_dq("vendas", ds, run_id, lidas, aprovadas, df_quarentena)
         logger.info("[OK] Tabela de Vendas processada e salva com sucesso na Silver!")
 
     except Exception as e:
@@ -209,4 +213,4 @@ def main(ds: str | None = None):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else None)
+    main(*sys.argv[1:3])

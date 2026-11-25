@@ -41,6 +41,9 @@ DATASETS_SILVER = {
     "silver/financeiro": "s3://silver/financeiro/",
     "silver/clima": "s3://silver/clima/",
     "quarentena/clientes": "s3://silver/_quarentena/clientes/",
+    "quarentena/produtos": "s3://silver/_quarentena/produtos/",
+    "quarentena/financeiro": "s3://silver/_quarentena/financeiro/",
+    "quarentena/clima": "s3://silver/_quarentena/clima/",
     "quarentena/vendas": "s3://silver/_quarentena/vendas/",
 }
 

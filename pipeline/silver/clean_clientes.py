@@ -2,6 +2,7 @@ import sys
 
 import pandas as pd
 
+from pipeline.common.audit import record_dq
 from pipeline.common.logging import get_logger
 from pipeline.common.logical_date import resolve_ds
 from pipeline.common.merge import merge_state
@@ -109,7 +110,7 @@ def deduplicate_clientes(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     return df.sort_values("id_cliente").reset_index(drop=True), df_quarentena
 
 
-def main(ds: str | None = None):
+def main(ds: str | None = None, run_id: str | None = None):
     ds = resolve_ds(ds)
     logger.info(f"Iniciando processamento Silver para Clientes (partição {ds})")
 
@@ -118,7 +119,8 @@ def main(ds: str | None = None):
         df = read_bronze(fs, "clientes", ds)
         if df is None:
             raise FileNotFoundError(f"Partição Bronze de clientes não encontrada para {ds}")
-        logger.info(f"Linhas lidas inicialmente: {len(df)}")
+        lidas = len(df)
+        logger.info(f"Linhas lidas inicialmente: {lidas}")
 
         cols_str = ["nome_cliente", "canal", "regiao", "cidade", "uf", "representante"]
         for col in cols_str:
@@ -139,7 +141,8 @@ def main(ds: str | None = None):
         df["ativo"] = df["ativo"].apply(normalize_ativo)
 
         df, df_quarentena = deduplicate_clientes(df)
-        logger.info(f"Clientes aprovados (→ Silver): {len(df)}")
+        aprovadas = len(df)
+        logger.info(f"Clientes aprovados (→ Silver): {aprovadas}")
 
         df = merge_state(read_silver_state(fs, SILVER_PATH), df, key=["id_cliente"])
         write_silver(fs, df, SILVER_PATH, partition_cols=["regiao"])
@@ -147,9 +150,11 @@ def main(ds: str | None = None):
         # Quarentena gravada após a Silver: o bucket 'silver' é criado na escrita acima
         for motivo, grupo in df_quarentena.groupby("motivo_rejeicao"):
             logger.warning(f"  [{len(grupo)} registros] {motivo}: {sorted(grupo['id_cliente'].tolist())}")
-        quarentena_path = write_quarantine(fs, df_quarentena, "clientes")
+        quarentena_path = write_quarantine(fs, df_quarentena, "clientes", ds)
         if not df_quarentena.empty:
             logger.warning(f"[QUARENTENA] {len(df_quarentena)} clientes salvos em {quarentena_path}")
+
+        record_dq("clientes", ds, run_id, lidas, aprovadas, df_quarentena)
 
         logger.info("[OK] Tabela de Clientes processada e salva com sucesso na Silver!")
 
@@ -159,4 +164,4 @@ def main(ds: str | None = None):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else None)
+    main(*sys.argv[1:3])

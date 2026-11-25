@@ -109,11 +109,11 @@ run_pipeline() {
   "$PYTHON" -m pipeline.bronze.ingest_clima "$ds"
 
   log "Silver ($ds)"
-  "$PYTHON" -m pipeline.silver.clean_clientes "$ds"
-  "$PYTHON" -m pipeline.silver.clean_produtos "$ds"
-  "$PYTHON" -m pipeline.silver.clean_financeiro "$ds"
-  "$PYTHON" -m pipeline.silver.clean_clima "$ds"
-  "$PYTHON" -m pipeline.silver.clean_vendas "$ds"
+  "$PYTHON" -m pipeline.silver.clean_clientes "$ds" "e2e-$ds"
+  "$PYTHON" -m pipeline.silver.clean_produtos "$ds" "e2e-$ds"
+  "$PYTHON" -m pipeline.silver.clean_financeiro "$ds" "e2e-$ds"
+  "$PYTHON" -m pipeline.silver.clean_clima "$ds" "e2e-$ds"
+  "$PYTHON" -m pipeline.silver.clean_vendas "$ds" "e2e-$ds"
 
   log "Carga no load_stage"
   "$PYTHON" -m pipeline.load.staging
@@ -136,7 +136,7 @@ dbt seed
 dbt build
 
 log "Verificação dos números de referência"
-"$PYTHON" scripts/e2e_verify.py
+E2E_DS="$DS_DIA1" "$PYTHON" scripts/e2e_verify.py
 
 log "Escrita atômica contra o MinIO real (falhas injetadas)"
 "$PYTHON" scripts/e2e_atomic_check.py
@@ -179,7 +179,7 @@ for f in falhas:
     print(f"[{'FALHA' if f in inesperadas else 'PENDENTE'}] dbt (dia 2): {f}")
 sys.exit(1 if inesperadas else 0)
 PY
-  "$PYTHON" scripts/e2e_verify_day2.py "$WORKDIR/mudancas.json"
+  E2E_DS="$DS_DIA2" "$PYTHON" scripts/e2e_verify_day2.py "$WORKDIR/mudancas.json"
 
   # Idempotência e backfill fora de ordem (ARQ-01). O estado atual (dia 2) é a referência.
   log "Fingerprint do estado após o dia 2"

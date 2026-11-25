@@ -20,6 +20,7 @@ fail_under = 80
 include = [
     "pipeline/common/*",
     "pipeline/silver/clean_clientes.py",
+    "pipeline/silver/clean_clima.py",
     "pipeline/silver/clean_financeiro.py",
     "pipeline/silver/clean_produtos.py",
     "pipeline/silver/clean_vendas.py",

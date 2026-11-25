@@ -100,3 +100,12 @@ def test_tasks_bronze_e_silver_recebem_a_data_logica(dagbag, task_id):
 
     task = dagbag.dags[DAG_ID].get_task(task_id)
     assert "ds" in inspect.signature(task.python_callable).parameters
+
+
+@pytest.mark.parametrize("task_id", [t for t in TASKS_POR_DATA_LOGICA if t.endswith("_silver")])
+def test_tasks_silver_recebem_o_run_id_para_a_auditoria(dagbag, task_id):
+    """O `run_id` do Airflow identifica a execução em `audit.dq_results` (ARQ-05)."""
+    import inspect
+
+    task = dagbag.dags[DAG_ID].get_task(task_id)
+    assert "run_id" in inspect.signature(task.python_callable).parameters

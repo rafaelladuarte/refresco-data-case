@@ -283,37 +283,63 @@ class TestWriteSilver:
 
 
 class TestWriteQuarantine:
-    def test_grava_rejeitados_e_retorna_o_caminho(self, memfs):
-        path = storage.write_quarantine(
-            memfs, pd.DataFrame({"id": ["x"], "motivo_rejeicao": ["m"]}), "vendas"
-        )
-        assert path == "s3://silver/_quarentena/vendas/"
-        assert ler(memfs, "silver/_quarentena/vendas") == ["x"]
+    DS = "2024-06-01"
+
+    def test_grava_rejeitados_por_data_e_retorna_o_caminho(self, memfs):
+        rejeitados = pd.DataFrame({"id": ["x"], "motivo_rejeicao": ["m"]})
+        path = storage.write_quarantine(memfs, rejeitados, "vendas", self.DS)
+        assert path == "s3://silver/_quarentena/vendas/2024-06-01"
+        assert ler(memfs, "silver/_quarentena/vendas/2024-06-01") == ["x"]
         assert sobras(memfs) == []
 
-    def test_substitui_a_quarentena_anterior(self, memfs):
-        storage.write_quarantine(memfs, pd.DataFrame({"id": ["x", "y"]}), "vendas")
-        storage.write_quarantine(memfs, pd.DataFrame({"id": ["z"]}), "vendas")
-        assert ler(memfs, "silver/_quarentena/vendas") == ["z"]
+    def test_quarentena_de_cada_data_e_independente(self, memfs):
+        storage.write_quarantine(memfs, pd.DataFrame({"id": ["d1"]}), "vendas", "2024-06-01")
+        storage.write_quarantine(memfs, pd.DataFrame({"id": ["d2"]}), "vendas", "2024-06-02")
+        assert ler(memfs, "silver/_quarentena/vendas/2024-06-01") == ["d1"]
+        assert ler(memfs, "silver/_quarentena/vendas/2024-06-02") == ["d2"]
+        assert ler(memfs, "silver/_quarentena/vendas") == [
+            "d1",
+            "d2",
+        ]  # a pasta da entidade reúne o histórico
 
-    def test_quarentena_vazia_remove_a_anterior_e_nao_grava(self, memfs):
-        storage.write_quarantine(memfs, pd.DataFrame({"id": ["x"]}), "clientes")
-        storage.write_quarantine(memfs, pd.DataFrame({"id": []}), "clientes")
-        # no S3 diretório sem objetos não existe; o filesystem em memória guarda o diretório vazio
-        assert memfs.find("silver/_quarentena/clientes") == []
+    def test_reexecutar_a_mesma_data_substitui_so_aquela_data(self, memfs):
+        storage.write_quarantine(memfs, pd.DataFrame({"id": ["a", "b"]}), "vendas", "2024-06-01")
+        storage.write_quarantine(memfs, pd.DataFrame({"id": ["d2"]}), "vendas", "2024-06-02")
+        storage.write_quarantine(memfs, pd.DataFrame({"id": ["z"]}), "vendas", "2024-06-01")
+        assert ler(memfs, "silver/_quarentena/vendas/2024-06-01") == ["z"]
+        assert ler(memfs, "silver/_quarentena/vendas/2024-06-02") == ["d2"]
+
+    def test_quarentena_vazia_remove_a_da_data_e_preserva_as_outras(self, memfs):
+        storage.write_quarantine(memfs, pd.DataFrame({"id": ["a"]}), "clientes", "2024-06-01")
+        storage.write_quarantine(memfs, pd.DataFrame({"id": ["b"]}), "clientes", "2024-06-02")
+        storage.write_quarantine(memfs, pd.DataFrame({"id": []}), "clientes", "2024-06-01")
+        assert memfs.find("silver/_quarentena/clientes/2024-06-01") == []
+        assert ler(memfs, "silver/_quarentena/clientes/2024-06-02") == ["b"]
 
     def test_quarentena_vazia_sem_anterior_nao_faz_nada(self, memfs):
-        storage.write_quarantine(memfs, pd.DataFrame({"id": []}), "clientes")
+        storage.write_quarantine(memfs, pd.DataFrame({"id": []}), "clientes", self.DS)
         assert memfs.find("silver") == []
 
-    def test_falha_preserva_a_quarentena_anterior(self, memfs):
-        storage.write_quarantine(memfs, pd.DataFrame({"id": ["x"]}), "vendas")
+    def test_falha_preserva_a_quarentena_anterior_da_data(self, memfs):
+        storage.write_quarantine(memfs, pd.DataFrame({"id": ["x"]}), "vendas", self.DS)
         with (
             patch.object(pd.DataFrame, "to_parquet", side_effect=OSError("MinIO caiu")),
             pytest.raises(OSError),
         ):
-            storage.write_quarantine(memfs, pd.DataFrame({"id": ["novo"]}), "vendas")
-        assert ler(memfs, "silver/_quarentena/vendas") == ["x"]
+            storage.write_quarantine(memfs, pd.DataFrame({"id": ["novo"]}), "vendas", self.DS)
+        assert ler(memfs, "silver/_quarentena/vendas/2024-06-01") == ["x"]
+
+    def test_arquivo_no_formato_antigo_e_removido_para_dar_lugar_as_pastas_por_data(self, memfs):
+        """Antes do ARQ-05 a quarentena era um único arquivo `_quarentena/vendas`."""
+        memfs.pipe("silver/_quarentena/vendas", b"legado")
+        storage.write_quarantine(memfs, pd.DataFrame({"id": ["x"]}), "vendas", self.DS)
+        assert ler(memfs, "silver/_quarentena/vendas/2024-06-01") == ["x"]
+        assert not memfs.isfile("silver/_quarentena/vendas")
+
+    def test_caminho_da_quarentena_por_data(self):
+        assert (
+            storage.quarantine_path("produtos", "2024-06-01") == "s3://silver/_quarentena/produtos/2024-06-01"
+        )
 
 
 class TestReadSilverState:

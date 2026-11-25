@@ -202,6 +202,18 @@ docker compose exec airflow-scheduler airflow dags backfill dag_etl_pipeline \
 python -m pipeline.silver.clean_vendas 2026-11-20
 ```
 
+### Quarentena e auditoria
+
+Todo registro rejeitado vai para `silver/_quarentena/<entidade>/<data lógica>` (Parquet, com a coluna `motivo_rejeicao`), para as cinco entidades. Reexecutar uma data substitui só a quarentena dela; as demais datas ficam como histórico.
+
+Cada task Silver também grava em **`audit.dq_results`** (Postgres Gold) o que leu, aprovou, descartou por duplicidade e rejeitou, com uma linha por motivo:
+
+```sql
+select entidade, lidas, aprovadas, duplicadas, rejeitadas
+from audit.dq_results
+where run_id = '<run_id do Airflow>' and motivo is null;   -- resumo; sem o filtro, vem o detalhe por motivo
+```
+
 A fonte (`data/raw`) é um *snapshot* completo a cada execução, não uma sequência de deltas. Consequências assumidas: uma linha que **some** da origem permanece na Silver (o merge nunca apaga), e a unicidade de CNPJ entre clientes é aplicada dentro da partição da data, não entre datas.
 
 ---
@@ -300,7 +312,7 @@ Limitações assumidas conscientemente, com o card correspondente no [BACKLOG](B
 
 | Limitação | Impacto | Card |
 |---|---|---|
-| O merge da Silver nunca apaga: linha que some da origem permanece | Cadastro removido na fonte continua na Silver; CNPJ duplicado entre datas não é detectado | ARQ-05 |
+| O merge da Silver nunca apaga: linha que some da origem permanece | Cadastro removido na fonte continua na Silver; CNPJ duplicado entre datas não é detectado | backlog |
 | A troca da escrita atômica no S3 não é instantânea (o S3 não tem `rename`) | Janela de poucos segundos, com recuperação automática na próxima escrita | — |
 | A carga usa `DROP TABLE ... CASCADE` e tipos inferidos pelo pandas | Força recriar as views `stg_*` a cada execução | ARQ-03 |
 | O incremental da fato filtra por `data_emissao` | Status financeiro atualizado depois não é reprocessado | MOD-01 |

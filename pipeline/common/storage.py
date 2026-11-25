@@ -226,16 +226,34 @@ def write_silver(
     _write_atomically(fs, df, path, partition_cols, run_id)
 
 
-def write_quarantine(fs: s3fs.S3FileSystem, df: pd.DataFrame, entity: str, run_id: str | None = None) -> str:
-    """Substitui a quarentena da entidade pelos registros rejeitados desta execução.
+def quarantine_path(entity: str, ds: str) -> str:
+    """Caminho da quarentena de uma entidade em uma data lógica: `silver/_quarentena/<entidade>/<ds>`."""
+    return f"{QUARANTINE_PREFIX}/{entity}/{ds}"
 
-    A quarentena da execução anterior é sempre removida, mesmo que a atual venha
-    vazia (nesse caso nada é gravado). Retorna o caminho da quarentena.
+
+def write_quarantine(
+    fs: s3fs.S3FileSystem, df: pd.DataFrame, entity: str, ds: str, run_id: str | None = None
+) -> str:
+    """Grava os registros rejeitados da data lógica `ds` em `_quarentena/<entidade>/<ds>`.
+
+    Reexecutar a mesma data substitui só a quarentena daquela data (mesmo quando a nova vem
+    vazia: nesse caso a anterior é removida e nada é gravado). As demais datas ficam como
+    histórico. Retorna o caminho da quarentena da data.
     """
-    path = f"{QUARANTINE_PREFIX}/{entity}/"
+    path = quarantine_path(entity, ds)
+    _remove_legacy_quarantine(fs, entity)
     if df.empty:
         if fs.exists(_key(path)):
             fs.rm(_key(path), recursive=True)
     else:
         _write_atomically(fs, df, path, run_id=run_id)
     return path
+
+
+def _remove_legacy_quarantine(fs: s3fs.S3FileSystem, entity: str) -> None:
+    """Antes do ARQ-05 a quarentena era UM arquivo `_quarentena/<entidade>`, o que colide com a pasta
+    por data. Esse arquivo antigo é removido: a quarentena é reconstruída a cada execução."""
+    legado = _key(f"{QUARANTINE_PREFIX}/{entity}")
+    if fs.exists(legado) and fs.isfile(legado):
+        logger.warning(f"Removendo quarentena no formato antigo (arquivo único): {legado}")
+        fs.rm(legado)

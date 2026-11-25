@@ -159,9 +159,9 @@ O filtro `data_emissao > max(data_emissao)` perde vendas retroativas e atualiza�
 Hoje só `vendas` grava quarentena; clientes e produtos só fazem log.
 
 - **Critérios de aceite:**
-  - [ ] Quarentena para todas as entidades em `silver/_quarentena/<entidade>/<data>/`
-  - [ ] Tabela `audit.dq_results` (run_id, entidade, lidas, aprovadas, rejeitadas, motivo, timestamp)
-  - [ ] Cada task Silver grava sua linha de auditoria
+  - [x] Quarentena para todas as entidades em `silver/_quarentena/<entidade>/<data>/`
+  - [x] Tabela `audit.dq_results` (run_id, entidade, lidas, aprovadas, rejeitadas, motivo, timestamp)
+  - [x] Cada task Silver grava sua linha de auditoria
 
 ---
 
