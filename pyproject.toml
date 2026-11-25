@@ -1,0 +1,43 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra --strict-markers"
+markers = [
+    "airflow: precisa do Airflow instalado (roda dentro da imagem do Airflow, no job e2e)",
+]
+
+[tool.coverage.run]
+source = ["pipeline"]
+branch = true
+
+# Gate de cobertura (decisão D3 da Sprint 2): 80% em pipeline/common/ e nos módulos com
+# funções de regra. `pytest --cov` aplica o gate; o relatório completo de pipeline/ sai com
+# `coverage report --include='pipeline/*' --fail-under=0`.
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+fail_under = 80
+include = [
+    "pipeline/common/*",
+    "pipeline/silver/clean_clientes.py",
+    "pipeline/silver/clean_financeiro.py",
+    "pipeline/silver/clean_produtos.py",
+    "pipeline/silver/clean_vendas.py",
+]
+# main() só orquestra entrada e saída (S3/Postgres) e é coberto pelo e2e (decisão D3 da Sprint 2)
+exclude_also = [
+    "def main\\(",
+    "def load_to_staging\\(",
+    "if __name__ == .__main__.:",
+]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+extend-exclude = ["dbt", "notebooks", "streamlit"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["pipeline"]

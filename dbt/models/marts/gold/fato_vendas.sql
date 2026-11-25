@@ -48,6 +48,8 @@ select
     v.preco_unitario,
     v.desconto_pct,
     v.receita_liquida,
+    -- NULL quando o produto não tem custo (dim_produto.custo_disponivel = false, DQ-09):
+    -- receita e volume continuam valendo, só a margem não é calculada
     (v.qtd_caixas * p.custo_unitario) as custo_total,
     (v.receita_liquida - (v.qtd_caixas * p.custo_unitario)) as margem_bruta,
     

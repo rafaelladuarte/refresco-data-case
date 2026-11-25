@@ -52,6 +52,18 @@ models:
         description: "Canal do cliente. Ausente na origem → 'Não informado' (membro desconhecido)."
         data_tests:
           - not_null
+          - accepted_values:
+              values: ['Atacado', 'Conveniência', 'Food Service', 'Supermercado', 'Varejo Tradicional', 'Não informado']
+      - name: uf
+        description: "UF do cliente."
+        data_tests:
+          - accepted_values:
+              values: ['MG']
+      - name: regiao
+        description: "Região intermediária de Minas Gerais do cliente."
+        data_tests:
+          - accepted_values:
+              values: ['Alto Paranaíba', 'Noroeste de Minas', 'Sul de Minas', 'Triângulo Mineiro']
 
   - name: dim_produto
     description: "Dimensão de produtos utilizando SCD Tipo 1."
@@ -65,6 +77,29 @@ models:
         description: "Chave natural vinda da origem."
         data_tests:
           - not_null
+      - name: familia
+        description: "Família do produto."
+        data_tests:
+          - accepted_values:
+              values: ['ÁGUA', 'ÁGUA DE COCO', 'BEBIDA VEGETAL', 'ENERGÉTICO', 'ISOTÔNICO', 'REFRIGERANTE', 'SUCO']
+      - name: custo_unitario
+        description: "Custo unitário. NULL quando a origem traz custo <= 0 ou ausente (ver custo_disponivel)."
+      - name: custo_disponivel
+        description: "False quando o custo da origem é <= 0 ou ausente: o produto fica fora do cálculo de margem (DQ-09)."
+        data_tests:
+          - not_null
+      - name: preco_disponivel
+        description: "False quando o preço de tabela da origem é <= 0 ou ausente (preco_tabela fica NULL)."
+        data_tests:
+          - not_null
+    data_tests:
+      # A flag e o valor precisam concordar: custo disponível é sempre positivo, indisponível é sempre NULL
+      - dbt_utils.expression_is_true:
+          name: dim_produto_custo_coerente_com_flag
+          expression: "(custo_disponivel and custo_unitario > 0) or (not custo_disponivel and custo_unitario is null)"
+      - dbt_utils.expression_is_true:
+          name: dim_produto_preco_coerente_com_flag
+          expression: "(preco_disponivel and preco_tabela > 0) or (not preco_disponivel and preco_tabela is null)"
 
   - name: dim_representante
     description: "Dimensão de representantes extraída das vendas (valores únicos)."
@@ -95,31 +130,20 @@ models:
       - name: sk_cliente
         description: "Foreign Key apontando para dim_cliente."
         data_tests:
-          - not_null:
-              config:
-                severity: warn
-                # WARN intencional: load_stage.vendas contém id_cliente orphãos
-                # (ex: C0004, C0005, linha em branco) que não existem em load_stage.clientes.
-                # Problema de qualidade na origem — o JOIN em fato_vendas está correto.
+          # Vendas com cliente inexistente são barradas na Silver (quarentena), então
+          # qualquer órfão aqui é regressão e deve falhar o build.
+          - not_null
           - relationships:
               to: ref('dim_cliente')
               field: sk_cliente
-              config:
-                severity: warn
       - name: sk_produto
         description: "Foreign Key apontando para dim_produto."
         data_tests:
-          - not_null:
-              config:
-                severity: warn
-                # WARN intencional: load_stage.vendas contém id_produto orphãos
-                # (ex: P099, PXXX, P000, P-01) que não existem em load_stage.produtos.
-                # Problema de qualidade na origem — o JOIN em fato_vendas está correto.
+          # Mesma regra de sk_cliente: órfãos ficam na quarentena da Silver.
+          - not_null
           - relationships:
               to: ref('dim_produto')
               field: sk_produto
-              config:
-                severity: warn
       - name: sk_tempo
         description: "Foreign Key apontando para dim_tempo."
         data_tests:

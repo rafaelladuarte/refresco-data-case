@@ -126,8 +126,10 @@ erDiagram
         text marca
         text embalagem
         numeric volume_ml
-        numeric preco_tabela
-        numeric custo_unitario
+        numeric preco_tabela "NULL se indisponível"
+        numeric custo_unitario "NULL se indisponível"
+        boolean custo_disponivel
+        boolean preco_disponivel
     }
 
     dim_representante {

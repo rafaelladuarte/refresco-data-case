@@ -1,20 +1,21 @@
 import pandas as pd
-import s3fs
-import logging
-import re
 
-from pipeline.settings import s3_storage_options
-from pipeline.silver.text import clean_text
+from pipeline.common.logging import get_logger
+from pipeline.common.storage import (
+    get_s3_client,
+    read_bronze,
+    read_silver,
+    write_quarantine,
+    write_silver,
+)
+from pipeline.common.validators import (
+    PATTERN_ID_CLIENTE,
+    PATTERN_ID_PRODUTO,
+    clean_text,
+    normalize_id,
+)
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Padrões de ID válidos — ajuste as regexes conforme o seu padrão de negócio
-# ---------------------------------------------------------------------------
-PATTERN_ID_CLIENTE = re.compile(r'^C\d{4}$', re.IGNORECASE)   # ex: C0001 – C9999
-PATTERN_ID_PRODUTO = re.compile(r'^P\d{3}$', re.IGNORECASE)   # ex: P001 – P999
-
+logger = get_logger(__name__)
 
 # Formatos de data aceitos em data_emissao. São mutuamente exclusivos (uma string
 # casa com no máximo um), então a ordem não altera o resultado.
@@ -27,11 +28,6 @@ def parse_mixed_dates(date_series: pd.Series) -> pd.Series:
     for fmt in DATE_FORMATS:
         result = result.combine_first(pd.to_datetime(date_series, format=fmt, errors="coerce"))
     return result
-
-
-def normalize_id(series: pd.Series) -> pd.Series:
-    """Remove espaços, padroniza em maiúsculas e converte None/NaN para string vazia (facilita validação e joins)."""
-    return series.fillna("").astype(str).str.strip().str.upper()
 
 
 def validate_vendas(
@@ -78,16 +74,22 @@ def validate_vendas(
         (df["data_emissao"].isna(), "data_emissao inválida: " + fmt("data_emissao_original")),
         (~(df["qtd_caixas"] > 0), "qtd_caixas deve ser > 0: " + fmt("qtd_caixas")),
         (~(df["preco_unitario"] > 0), "preco_unitario deve ser > 0: " + fmt("preco_unitario")),
-        (~df["desconto_pct"].between(0, 1, inclusive="left"),
-         "desconto_pct fora de [0, 1): " + fmt("desconto_pct")),
+        (
+            ~df["desconto_pct"].between(0, 1, inclusive="left"),
+            "desconto_pct fora de [0, 1): " + fmt("desconto_pct"),
+        ),
         (cliente_vazio, "id_cliente vazio"),
         (~cliente_vazio & ~cliente_formato_ok, "id_cliente formato inválido: " + fmt("id_cliente")),
-        (~cliente_vazio & cliente_formato_ok & ~df["id_cliente"].isin(ids_clientes_validos),
-         "id_cliente sem cadastro: " + fmt("id_cliente")),
+        (
+            ~cliente_vazio & cliente_formato_ok & ~df["id_cliente"].isin(ids_clientes_validos),
+            "id_cliente sem cadastro: " + fmt("id_cliente"),
+        ),
         (produto_vazio, "id_produto vazio"),
         (~produto_vazio & ~produto_formato_ok, "id_produto formato inválido: " + fmt("id_produto")),
-        (~produto_vazio & produto_formato_ok & ~df["id_produto"].isin(ids_produtos_validos),
-         "id_produto sem cadastro: " + fmt("id_produto")),
+        (
+            ~produto_vazio & produto_formato_ok & ~df["id_produto"].isin(ids_produtos_validos),
+            "id_produto sem cadastro: " + fmt("id_produto"),
+        ),
     ]
 
     if df.empty:
@@ -109,24 +111,15 @@ def validate_vendas(
 def main():
     logger.info("Iniciando processamento Silver para Vendas")
 
-    storage_options = s3_storage_options()
-
     try:
-        fs = s3fs.S3FileSystem(**storage_options)
+        fs = get_s3_client()
 
         # ------------------------------------------------------------------
         # 1. Lê vendas da Bronze
         # ------------------------------------------------------------------
-        arquivos = fs.glob("bronze/vendas/**/*.csv")
-        if not arquivos:
-            logger.warning("Nenhum arquivo encontrado em bronze/vendas/")
+        df = read_bronze(fs, "vendas")
+        if df is None:
             return
-
-        logger.info(f"Encontrados {len(arquivos)} arquivos na Bronze. Lendo dados...")
-        df = pd.concat(
-            [pd.read_csv(f"s3://{a}", storage_options=storage_options) for a in arquivos],
-            ignore_index=True,
-        )
         logger.info(f"Linhas lidas da Bronze: {len(df)}")
 
         # ------------------------------------------------------------------
@@ -135,7 +128,7 @@ def main():
         # ------------------------------------------------------------------
         # IDs: vazio ("") em vez de nulo, pois as regras de validação comparam com string vazia
         for col in ["id_venda", "id_cliente", "id_produto"]:
-            df[col] = df[col].fillna("").astype(str).str.strip().str.upper()
+            df[col] = normalize_id(df[col])
         # Atributos descritivos: nulo permanece nulo (sem virar "nan" ou "")
         for col in ["canal_venda", "representante"]:
             df[col] = clean_text(df[col])
@@ -154,7 +147,9 @@ def main():
 
         df["_ingested_at"] = pd.to_datetime(df["_ingested_at"], errors="coerce")
         # Ordenação estável: em empate de _ingested_at o resultado é determinístico
-        df = df.sort_values("_ingested_at", kind="mergesort").drop_duplicates(subset=["id_venda"], keep="last")
+        df = df.sort_values("_ingested_at", kind="mergesort").drop_duplicates(
+            subset=["id_venda"], keep="last"
+        )
         logger.info(f"Após deduplicação por id_venda: {len(df)} linhas")
 
         # ------------------------------------------------------------------
@@ -162,10 +157,8 @@ def main():
         #    (assumindo que clean_clientes e clean_produtos já rodaram antes)
         # ------------------------------------------------------------------
         logger.info("Carregando cadastros de referência da Silver para validação...")
-        df_clientes = pd.read_parquet("s3://silver/clientes/", storage_options=storage_options)
-        df_produtos = pd.read_parquet(
-            "s3://silver/produtos/produtos_clean.parquet", storage_options=storage_options
-        )
+        df_clientes = read_silver("s3://silver/clientes/")
+        df_produtos = read_silver("s3://silver/produtos/produtos_clean.parquet")
 
         # ------------------------------------------------------------------
         # 5. Validação: obrigatórios, medidas e integridade referencial.
@@ -181,41 +174,24 @@ def main():
         logger.info(f"Registros aprovados (→ Silver): {len(df_ok)}")
         logger.info(f"Registros rejeitados (→ Quarentena): {len(df_quarentena)}")
 
-        # Remove a quarentena da execução anterior mesmo que a atual venha vazia
-        quarentena_path = "s3://silver/_quarentena/vendas/"
-        if fs.exists(quarentena_path):
-            fs.rm(quarentena_path, recursive=True)
-
         if not df_quarentena.empty:
             # Log por tipo de regra (sem o valor específico) para visibilidade no Airflow
-            regras = df_quarentena["motivo_rejeicao"].str.split(" | ", regex=False).explode().str.split(":").str[0]
+            regras = (
+                df_quarentena["motivo_rejeicao"].str.split(" | ", regex=False).explode().str.split(":").str[0]
+            )
             for regra, qtd in regras.value_counts().items():
                 logger.warning(f"  [{qtd} registros] {regra}")
 
-            # Persiste quarentena para auditoria e reprocessamento manual
-            df_quarentena.to_parquet(
-                path=quarentena_path,
-                storage_options=storage_options,
-                index=False,
-                compression="snappy",
-            )
+        # Persiste a quarentena para auditoria e reprocessamento manual. A da execução
+        # anterior é removida mesmo que a atual venha vazia.
+        quarentena_path = write_quarantine(fs, df_quarentena, "vendas")
+        if not df_quarentena.empty:
             logger.warning(f"[QUARENTENA] {len(df_quarentena)} registros salvos em {quarentena_path}")
 
         # ------------------------------------------------------------------
         # 6. Salva apenas registros íntegros na Silver
         # ------------------------------------------------------------------
-        target_path_full = "s3://silver/vendas/"
-        if fs.exists(target_path_full):
-            logger.info(f"Limpando diretório existente: {target_path_full}")
-            fs.rm(target_path_full, recursive=True)
-
-        df_ok.to_parquet(
-            path=target_path_full,
-            partition_cols=["ano", "mes"],
-            storage_options=storage_options,
-            index=False,
-            compression="snappy",
-        )
+        write_silver(fs, df_ok, "s3://silver/vendas/", partition_cols=["ano", "mes"])
         logger.info("[OK] Tabela de Vendas processada e salva com sucesso na Silver!")
 
     except Exception as e:

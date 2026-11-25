@@ -91,6 +91,8 @@ models:
         description: "Chave estrangeira da venda associada."
         data_tests:
           - not_null
+          # No máximo 1 lançamento por venda: protege a fato de duplicar linhas no join.
+          - unique
       - name: data_competencia
         description: "Data de competência do lançamento."
         data_tests:

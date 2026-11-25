@@ -6,6 +6,12 @@ venv/
 .venv/
 env/
 
+# Testes
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+
 # Data
 data/bronze/
 data/silver/

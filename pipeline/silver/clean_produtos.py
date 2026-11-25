@@ -1,54 +1,68 @@
 import pandas as pd
-import s3fs
-import logging
-import re
 
-from pipeline.settings import s3_storage_options
-from pipeline.silver.text import clean_text
+from pipeline.common.logging import get_logger
+from pipeline.common.storage import get_s3_client, read_bronze, write_silver
+from pipeline.common.validators import PATTERN_ID_PRODUTO, clean_text, normalize_id
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
-# Formato válido de id_produto: P seguido de 3 dígitos (ex: P001)
-PATTERN_ID_PRODUTO = re.compile(r'^P\d{3}$', re.IGNORECASE)
+# Valor monetário sem significado (<= 0 ou ausente) vira nulo e ganha a flag `<flag> = False`
+VALORES_MONETARIOS = {"custo_unitario": "custo_disponivel", "preco_tabela": "preco_disponivel"}
+
+
+def flag_valores_indisponiveis(df: pd.DataFrame) -> pd.DataFrame:
+    """Sinaliza custo e preço indisponíveis sem descartar o produto (DQ-09, opção A).
+
+    `custo_unitario`/`preco_tabela` nulo, não numérico ou <= 0 vira NULL, e a flag
+    correspondente (`custo_disponivel`/`preco_disponivel`) fica False. O produto continua
+    na Silver: as vendas dele seguem contando em receita e volume, e só a margem deixa de
+    ser calculada (custo zero produziria margem de 100%).
+    """
+    df = df.copy()
+    for col, flag in VALORES_MONETARIOS.items():
+        valor = pd.to_numeric(df[col], errors="coerce")
+        disponivel = valor > 0
+        df[col] = valor.where(disponivel)
+        df[flag] = disponivel.astype(bool)
+    return df
+
 
 def main():
     logger.info("Iniciando processamento Silver para Produtos")
-    
-    storage_options = s3_storage_options()
-    
+
     try:
-        fs = s3fs.S3FileSystem(**storage_options)
-        
-        arquivos = fs.glob("bronze/produtos/**/*.csv")
-        if not arquivos:
-            logger.warning("Nenhum arquivo encontrado em bronze/produtos/")
+        fs = get_s3_client()
+        df = read_bronze(fs, "produtos")
+        if df is None:
             return
-            
-        logger.info(f"Encontrados {len(arquivos)} arquivos na Bronze. Lendo dados...")
-        df = pd.concat([pd.read_csv(f"s3://{arquivo}", storage_options=storage_options) for arquivo in arquivos], ignore_index=True)
         logger.info(f"Linhas lidas da Bronze: {len(df)}")
-        
+
         for col in ["nome_produto", "familia", "marca", "embalagem"]:
             df[col] = clean_text(df[col])
-        
-        df["familia"] = df["familia"].str.upper().replace({
-            "REFRIGERANTES": "REFRIGERANTE", 
-            "SUCOS": "SUCO", 
-            "CERVEJAS": "CERVEJA", 
-            "ÁGUAS": "AGUA", 
-            "AGUAS": "AGUA"
-        })
-        
-        df["volume_ml"] = df["volume_ml"].astype(str).str.extract(r'(\d+)').astype(float)
-        
+
+        df["familia"] = (
+            df["familia"]
+            .str.upper()
+            .replace(
+                {
+                    "REFRIGERANTES": "REFRIGERANTE",
+                    "SUCOS": "SUCO",
+                    "CERVEJAS": "CERVEJA",
+                    "ÁGUAS": "AGUA",
+                    "AGUAS": "AGUA",
+                }
+            )
+        )
+
+        df["volume_ml"] = df["volume_ml"].astype(str).str.extract(r"(\d+)").astype(float)
+
         for col in ["preco_tabela", "custo_unitario"]:
             df[col] = pd.to_numeric(df[col], errors="coerce")
-            
+
         df["_ingested_at"] = pd.to_datetime(df["_ingested_at"], errors="coerce")
-        
+
         # Normaliza id_produto: remove espaços e descarta formatos inválidos
-        df["id_produto"] = df["id_produto"].fillna("").astype(str).str.strip().str.upper()
+        df["id_produto"] = normalize_id(df["id_produto"])
 
         mask_id_invalido = ~df["id_produto"].str.match(PATTERN_ID_PRODUTO)
         df_id_invalido = df[mask_id_invalido].copy()
@@ -61,24 +75,20 @@ def main():
 
         df = df.sort_values("_ingested_at").drop_duplicates(subset=["id_produto"], keep="last")
         logger.info(f"Deduplicação concluída. Linhas finais: {len(df)}")
-        
-        target_path_full = "s3://silver/produtos/produtos_clean.parquet"
-        
-        if fs.exists(target_path_full):
-            logger.info(f"Limpando diretório existente: {target_path_full}")
-            fs.rm(target_path_full, recursive=True)
-        
-        df.to_parquet(
-            path=target_path_full,
-            storage_options=storage_options,
-            index=False,
-            compression="snappy"
-        )
+
+        df = flag_valores_indisponiveis(df)
+        for col, flag in VALORES_MONETARIOS.items():
+            sem_valor = sorted(df.loc[~df[flag], "id_produto"].tolist())
+            if sem_valor:
+                logger.warning(f"{len(sem_valor)} produtos sem {col} válido ({flag}=false): {sem_valor}")
+
+        write_silver(fs, df, "s3://silver/produtos/produtos_clean.parquet")
         logger.info("[OK] Tabela de Produtos salva com sucesso em silver/produtos/!")
-        
+
     except Exception as e:
         logger.error(f"[ERRO] Erro no processamento de Produtos: {str(e)}")
         raise
+
 
 if __name__ == "__main__":
     main()

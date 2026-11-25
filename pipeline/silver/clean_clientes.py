@@ -1,16 +1,10 @@
 import pandas as pd
-import s3fs
-import logging
-import re
 
-from pipeline.settings import s3_storage_options
-from pipeline.silver.text import clean_text
+from pipeline.common.logging import get_logger
+from pipeline.common.storage import get_s3_client, read_bronze, write_quarantine, write_silver
+from pipeline.common.validators import PATTERN_ID_CLIENTE, clean_text, normalize_id
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-
-# Formato válido de id_cliente: C seguido de 4 dígitos (ex: C0001)
-PATTERN_ID_CLIENTE = re.compile(r'^C\d{4}$', re.IGNORECASE)
+logger = get_logger(__name__)
 
 # Sequências típicas de texto UTF-8 decodificado como Latin-1 (ex.: "Ã©" no lugar de "é")
 MOJIBAKE_MARKERS = ("Ã", "Â")
@@ -39,9 +33,12 @@ def normalize_ativo(value):
     v = str(value).strip().lower()
     true_values = {"s", "sim", "1", "true", "t", "yes"}
     false_values = {"n", "nao", "não", "0", "false", "f", "no"}
-    if v in true_values: return True
-    elif v in false_values: return False
+    if v in true_values:
+        return True
+    if v in false_values:
+        return False
     return None
+
 
 def deduplicate_clientes(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Aplica as regras de validação e deduplicação do cadastro de clientes.
@@ -59,7 +56,7 @@ def deduplicate_clientes(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
       df_quarentena — registros rejeitados, com coluna `motivo_rejeicao`
     """
     df = df.copy()
-    df["id_cliente"] = df["id_cliente"].fillna("").astype(str).str.strip().str.upper()
+    df["id_cliente"] = normalize_id(df["id_cliente"])
     rejeitados = []
 
     def rejeitar(mask: pd.Series, motivo) -> None:
@@ -94,35 +91,22 @@ def deduplicate_clientes(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
 
     df_quarentena = (
         pd.concat(rejeitados, ignore_index=True).drop(columns="_id_canonico", errors="ignore")
-        if rejeitados else df.iloc[0:0].assign(motivo_rejeicao=pd.Series(dtype="string"))
+        if rejeitados
+        else df.iloc[0:0].assign(motivo_rejeicao=pd.Series(dtype="string"))
     )
     return df.sort_values("id_cliente").reset_index(drop=True), df_quarentena
 
 
 def main():
     logger.info("Iniciando processamento Silver para Clientes")
-    
-    storage_options = s3_storage_options()
-    
+
     try:
-        fs = s3fs.S3FileSystem(**storage_options)
-        arquivos = fs.glob("bronze/clientes/**/*.csv")
-        
-        if not arquivos:
-            logger.warning("Nenhum arquivo encontrado em bronze/clientes/")
+        fs = get_s3_client()
+        df = read_bronze(fs, "clientes")
+        if df is None:
             return
-            
-        logger.info(f"Encontrados {len(arquivos)} arquivos na Bronze. Lendo dados...")
-        df = pd.concat(
-            [
-                pd.read_csv(f"s3://{arquivo}",
-                storage_options=storage_options) 
-                for arquivo in arquivos
-            ], 
-            ignore_index=True
-        )
         logger.info(f"Linhas lidas inicialmente: {len(df)}")
-        
+
         cols_str = ["nome_cliente", "canal", "regiao", "cidade", "uf", "representante"]
         for col in cols_str:
             df[col] = clean_text(df[col])
@@ -133,49 +117,32 @@ def main():
             reparados += int((corrigido != df[col]).sum())
             df[col] = corrigido
         if reparados:
-            logger.warning(f"{reparados} valores com dupla codificação (mojibake) corrigidos na origem de clientes")
-            
+            logger.warning(
+                f"{reparados} valores com dupla codificação (mojibake) corrigidos na origem de clientes"
+            )
+
         df["_ingested_at"] = pd.to_datetime(df["_ingested_at"], errors="coerce")
         df["uf"] = df["uf"].str.upper()
         df["ativo"] = df["ativo"].apply(normalize_ativo)
-        
+
         df, df_quarentena = deduplicate_clientes(df)
         logger.info(f"Clientes aprovados (→ Silver): {len(df)}")
 
-        target_path_full = "s3://silver/clientes/"
-        
-        if fs.exists(target_path_full):
-            logger.info(f"Limpando diretório existente: {target_path_full}")
-            fs.rm(target_path_full, recursive=True)
-
-        df.to_parquet(
-            path=target_path_full,
-            partition_cols=["regiao"],
-            storage_options=storage_options,
-            index=False,
-            compression="snappy"
-        )
+        write_silver(fs, df, "s3://silver/clientes/", partition_cols=["regiao"])
 
         # Quarentena gravada após a Silver: o bucket 'silver' é criado na escrita acima
-        quarentena_path = "s3://silver/_quarentena/clientes/"
-        if fs.exists(quarentena_path):
-            fs.rm(quarentena_path, recursive=True)
+        for motivo, grupo in df_quarentena.groupby("motivo_rejeicao"):
+            logger.warning(f"  [{len(grupo)} registros] {motivo}: {sorted(grupo['id_cliente'].tolist())}")
+        quarentena_path = write_quarantine(fs, df_quarentena, "clientes")
         if not df_quarentena.empty:
-            for motivo, grupo in df_quarentena.groupby("motivo_rejeicao"):
-                logger.warning(f"  [{len(grupo)} registros] {motivo}: {sorted(grupo['id_cliente'].tolist())}")
-            df_quarentena.to_parquet(
-                path=quarentena_path,
-                storage_options=storage_options,
-                index=False,
-                compression="snappy",
-            )
             logger.warning(f"[QUARENTENA] {len(df_quarentena)} clientes salvos em {quarentena_path}")
 
         logger.info("[OK] Tabela de Clientes processada e salva com sucesso na Silver!")
-        
+
     except Exception as e:
         logger.error(f"[ERRO] Erro no processamento de Clientes: {str(e)}")
         raise
+
 
 if __name__ == "__main__":
     main()

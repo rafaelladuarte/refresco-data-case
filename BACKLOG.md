@@ -1,6 +1,6 @@
 # 📋 Backlog — Refresco Data-Case
 
-Quadro Kanban com as melhorias e evoluções do projeto, levantadas na revisão técnica de 24/11/2026.
+Quadro Kanban com as melhorias e evoluções do projeto, levantadas na revisão técnica de 24/11/2026 e organizadas em sprints.
 Para mover um card, recorte-o e cole na coluna correspondente. Marque os critérios de aceite conforme forem concluídos.
 
 ## Legenda
@@ -14,26 +14,68 @@ Para mover um card, recorte-o e cole na coluna correspondente. Marque os critér
 
 ## Visão geral do quadro
 
-| Coluna | Cards |
-|---|---|
-| 🔜 A Fazer | 0 |
-| 📦 Backlog — Sprint 2 (médio prazo) | 13 |
-| 🧊 Backlog — Futuro (longo prazo) | 10 |
-| 🚧 Em Andamento | 0 |
-| 👀 Em Revisão | 0 |
-| ✅ Concluído | 13 (Sprint 1) + 1 extra |
+| Coluna | Cards | Foco |
+|---|---|---|
+| 🔜 A Fazer — Sprint 2 | 6 | Fundação de engenharia: módulo comum, testes, CI, contratos dbt |
+| 📦 Sprint 3 | 6 | Pipeline robusto: idempotência, atomicidade, incremental |
+| 📦 Sprint 4 | 7 | Modelagem e observabilidade |
+| 🧊 Opcionais | 4 | Diferenciais de portfólio |
+| 🚧 Em Andamento | 0 | |
+| 👀 Em Revisão | 0 | |
+| ✅ Concluído | 13 + 1 extra | Sprint 1 (24/11/2026) |
+
+**Roadmap:** Sprint 1 ✅ → **Sprint 2** (fundação) → Sprint 3 (robustez) → Sprint 4 (modelagem/observabilidade) → opcionais.
+A ordem importa: a Sprint 3 muda partes centrais do pipeline (escrita, carga, incremental), e os testes e a CI da Sprint 2 é que permitem fazer isso com segurança.
 
 ---
 
-## 🔜 A Fazer
+## 🔜 A Fazer — Sprint 2 · Fundação de engenharia
 
-_Nenhum card. Sprint 1 concluída em 24/11/2026; próximos cards serão puxados do Backlog — Sprint 2._
+> **Objetivo:** criar a rede de segurança (testes, CI, contratos mais rígidos) antes das mudanças estruturais da Sprint 3, e fechar os achados da validação da Sprint 1.
+> **Plano:** [`docs/backlog/SPRINT-02.md`](docs/backlog/SPRINT-02.md) (aprovado em 24/11/2026)
 
----
+### ENG-01 · Criar módulo compartilhado `pipeline/common/`
+`eng-software` · 🔴 Alta · `M`
 
-## 📦 Backlog — Sprint 2 (médio prazo)
+A Sprint 1 já centralizou as credenciais (`pipeline/settings.py`) e a limpeza de texto (`pipeline/silver/text.py`). Continuam duplicados: criação do cliente S3 (7 arquivos), `logging.basicConfig` (8), leitura da Bronze por glob, `rm` + `to_parquet` da Silver e quarentena (5), `ensure_bucket_exists` (2) e regex de ID (2).
 
-> Objetivo: demonstrar engenharia de software e boas práticas de pipeline.
+- **Critérios de aceite:**
+  - [x] `pipeline/common/config.py`: configuração tipada (absorve `settings.py`)
+  - [x] `pipeline/common/storage.py`: cliente S3, leitura da Bronze, escrita da Silver e da quarentena
+  - [x] `pipeline/common/validators.py`: regex de IDs, `normalize_id`, `clean_text`
+  - [x] `pipeline/common/logging.py`: configuração única de logging
+  - [x] Scripts Bronze/Silver/Load usando o módulo comum, sem mudança de comportamento (validado pelo e2e)
+  - [x] Pacote vazio `pipeline/gold/` removido
+
+### ENG-02 · Testes unitários da camada Silver
+`eng-software` · 🔴 Alta · `M`
+
+- **Critérios de aceite:**
+  - [x] `tests/` com pytest e fixtures pequenas de DataFrame
+  - [x] Cobertura de `validate_vendas`, `deduplicate_clientes`, `parse_mixed_dates`, `normalize_ativo`, mapeamentos de `tipo_lancamento`/`status`
+  - [x] Casos de borda: nulos, espaços, IDs fora do padrão, datas BR/ISO, descontos inválidos
+  - [x] Teste de importação da DAG (DAG carrega sem erros e sem ciclos)
+
+### ENG-03 · Pipeline de CI no GitHub Actions
+`eng-software` · 🔴 Alta · `M`
+
+- **Critérios de aceite:**
+  - [x] Lint e format com `ruff` (configuração versionada no `pyproject.toml`)
+  - [x] `pytest` com relatório de cobertura
+  - [x] Job e2e: MinIO + Postgres como service containers, pipeline Python sobre `data/raw` e `dbt build` (seeds, modelos e testes)
+  - [x] Badge de status no README
+
+### MOD-02 · Endurecer os testes dbt
+`qualidade-dados` · 🟠 Média · `P`
+
+Os órfãos já são removidos na Silver, então os testes de relacionamento com `warn` perderam o motivo.
+
+- **Arquivos:** `dbt/models/marts/gold/schema.yml`
+- **Critérios de aceite:**
+  - [x] `relationships` de `sk_cliente` e `sk_produto` com `severity: error`
+  - [x] Teste de unicidade de `id_venda` em `stg_financeiro` (protege a fato contra fan-out)
+  - [x] Teste singular de reconciliação: contagem e soma de `receita_liquida` na fato iguais às de `stg_vendas`
+  - [x] `accepted_values` para `canal`, `uf`, `familia`
 
 ### DQ-09 · Validar custo unitário de produtos
 `qualidade-dados` · 🟠 Média · `P`
@@ -41,9 +83,9 @@ _Nenhum card. Sprint 1 concluída em 24/11/2026; próximos cards serão puxados 
 _Achado na validação final da Sprint 1._ `P012` (Del Valle Pêssego) e `P019` (Burn Energy) chegam com `custo_unitario = 0.00` na origem e aparecem na Q4 com margem de 100%. Nenhuma regra valida custo hoje.
 
 - **Critérios de aceite:**
-  - [ ] Regra na Silver de produtos: `custo_unitario > 0` e `preco_tabela > 0` (ou custo zero sinalizado explicitamente)
-  - [ ] Produto inválido vai para quarentena, ou é mantido com flag `custo_indisponivel` e excluído da margem (decisão de negócio)
-  - [ ] Teste dbt em `dim_produto.custo_unitario`
+  - [x] Regra na Silver de produtos: `custo_unitario > 0` e `preco_tabela > 0` (ou custo zero sinalizado explicitamente)
+  - [x] Produto inválido vai para quarentena, ou é mantido com flag `custo_indisponivel` e excluído da margem (decisão de negócio)
+  - [x] Teste dbt em `dim_produto.custo_unitario`
 
 ### INF-04 · Artefatos do dbt criados como root
 `infra` · 🟢 Baixa · `P`
@@ -51,38 +93,14 @@ _Achado na validação final da Sprint 1._ `P012` (Del Valle Pêssego) e `P019` 
 _Achado na Sprint 1._ O container dbt roda como root, então `dbt/logs`, `dbt/target` e `dbt/dbt_packages` ficam com dono `root` no host e atrapalham quem roda o dbt fora do Docker.
 
 - **Critérios de aceite:**
-  - [ ] DockerOperator executa o dbt com o UID/GID do host (`user=`) ou os artefatos vão para um volume dedicado
-  - [ ] Documentado no README
+  - [x] DockerOperator executa o dbt com o UID/GID do host (`user=`) ou os artefatos vão para um volume dedicado
+  - [x] Documentado no README
 
-### ENG-01 · Criar módulo compartilhado `pipeline/common/`
-`eng-software` · 🔴 Alta · `M`
+---
 
-`get_s3_client`, `storage_options` e `ensure_bucket_exists` estão duplicados em 7 arquivos; os regex de ID, em 3.
+## 📦 Backlog — Sprint 3 · Pipeline robusto
 
-- **Critérios de aceite:**
-  - [ ] `common/config.py`: configuração tipada (dataclass ou pydantic-settings)
-  - [ ] `common/storage.py`: cliente S3, leitura e escrita Parquet
-  - [ ] `common/validators.py`: regex de IDs e regras reutilizáveis
-  - [ ] `common/logging.py`: configuração única de logging
-  - [ ] Scripts Bronze/Silver/Load usando o módulo comum
-
-### ENG-02 · Testes unitários da camada Silver
-`eng-software` · 🔴 Alta · `M`
-
-- **Critérios de aceite:**
-  - [ ] `tests/` com pytest e fixtures pequenas de DataFrame
-  - [ ] Cobertura de `validate_vendas`, `deduplicate_clientes`, `parse_mixed_dates`, `normalize_ativo`, mapeamentos de `tipo_lancamento`/`status`
-  - [ ] Casos de borda: nulos, espaços, IDs fora do padrão, datas BR/ISO, descontos inválidos
-  - [ ] Teste de importação da DAG (DAG carrega sem erros e sem ciclos)
-
-### ENG-03 · Pipeline de CI no GitHub Actions
-`eng-software` · 🔴 Alta · `M`
-
-- **Critérios de aceite:**
-  - [ ] Lint e format com `ruff`
-  - [ ] `pytest`
-  - [ ] `dbt deps && dbt build` contra um service container Postgres com dados de amostra
-  - [ ] Badge de status no README
+> **Objetivo:** atacar as causas raiz dos problemas vistos na validação final: execução idempotente, escrita atômica, carga tipada, incremental correto e auditoria de qualidade.
 
 ### ARQ-01 · Ingestão idempotente por `logical_date`
 `evolução` · 🔴 Alta · `G`
@@ -126,28 +144,6 @@ O filtro `data_emissao > max(data_emissao)` perde vendas retroativas e atualiza�
   - [ ] Filtro por `ingested_at` em vez de `data_emissao`
   - [ ] Teste: alterar o status de uma venda antiga e confirmar a propagação
 
-### MOD-02 · Endurecer os testes dbt
-`qualidade-dados` · 🟠 Média · `P`
-
-Os órfãos já são removidos na Silver, então os testes de relacionamento com `warn` perderam o motivo.
-
-- **Arquivos:** `dbt/models/marts/gold/schema.yml`
-- **Critérios de aceite:**
-  - [ ] `relationships` de `sk_cliente` e `sk_produto` com `severity: error`
-  - [ ] Teste de unicidade de `id_venda` em `stg_financeiro` (protege a fato contra fan-out)
-  - [ ] Teste singular de reconciliação: soma da `receita_liquida` na fato igual à soma na Silver aprovada
-  - [ ] `accepted_values` para `canal`, `uf`, `familia`
-
-### MOD-03 · Revisar `dim_representante`
-`modelagem` · 🟠 Média · `M`
-
-A dimensão é derivada de vendas por (nome, canal), então o mesmo representante aparece uma vez por canal e não se relaciona com `dim_cliente.representante`.
-
-- **Critérios de aceite:**
-  - [ ] Uma linha por representante (chave pelo nome normalizado ou por um ID criado)
-  - [ ] Canal como atributo da fato, não da dimensão de representante
-  - [ ] Relação com o representante da carteira do cliente documentada
-
 ### ARQ-04 · Concentrar regras de negócio no dbt
 `modelagem` · 🟢 Baixa · `P`
 
@@ -169,9 +165,19 @@ Hoje só `vendas` grava quarentena; clientes e produtos só fazem log.
 
 ---
 
-## 🧊 Backlog — Futuro (longo prazo)
+## 📦 Backlog — Sprint 4 · Modelagem e observabilidade
 
-> Objetivo: diferenciais de portfólio. Prioridade definida pelo foco desejado (dados, analytics ou backend).
+> **Objetivo:** evoluir o modelo dimensional (grão financeiro, histórico, representantes) e tornar o pipeline observável.
+
+### MOD-03 · Revisar `dim_representante`
+`modelagem` · 🟠 Média · `M`
+
+A dimensão é derivada de vendas por (nome, canal), então o mesmo representante aparece uma vez por canal e não se relaciona com `dim_cliente.representante`.
+
+- **Critérios de aceite:**
+  - [ ] Uma linha por representante (chave pelo nome normalizado ou por um ID criado)
+  - [ ] Canal como atributo da fato, não da dimensão de representante
+  - [ ] Relação com o representante da carteira do cliente documentada
 
 ### MOD-04 · Fato de lançamentos financeiros
 `modelagem` · 🟠 Média · `M`
@@ -225,13 +231,11 @@ As dimensões se dizem SCD1, mas o histórico de canal e representante do client
   - [ ] `contract: {enforced: true}` nos modelos da Gold
   - [ ] Violação de contrato gera quarentena (Silver) ou falha de build (Gold)
 
-### DQ-10 · Clima por região
-`evolução` · 🟢 Baixa · `M`
+---
 
-Os clientes estão em 4 mesorregiões de MG, mas o clima vem de uma única coordenada (Uberlândia).
+## 🧊 Opcionais · conforme o foco do portfólio
 
-- [ ] Coordenada representativa por região (seed `regioes_coordenadas`)
-- [ ] Ingestão de clima por região e join por (região do cliente, data)
+> Itens de diferenciação. Puxar apenas se fizerem sentido para a vaga ou o foco desejado (dados, analytics ou backend).
 
 ### EVO-01 · Astronomer Cosmos para tasks dbt por modelo *(opcional)*
 `evolução` · 🟢 Baixa · `M`
@@ -258,6 +262,16 @@ Resolve a atomicidade (ARQ-02) e acrescenta time travel e merge nativo, sem Spar
 - [ ] Silver gravada em Delta no MinIO
 - [ ] Merge incremental usando `MERGE` do Delta
 - [ ] Leitura no load via `deltalake`/`pyarrow`
+
+> ⚠️ **Fora de escopo de propósito:** Spark, Kafka e Kubernetes. Com ~3,5 mil linhas, seria tecnologia sem justificativa.
+
+### DQ-10 · Clima por região
+`evolução` · 🟢 Baixa · `M`
+
+Os clientes estão em 4 mesorregiões de MG, mas o clima vem de uma única coordenada (Uberlândia).
+
+- [ ] Coordenada representativa por região (seed `regioes_coordenadas`)
+- [ ] Ingestão de clima por região e join por (região do cliente, data)
 
 > ⚠️ **Fora de escopo de propósito:** Spark, Kafka e Kubernetes. Com ~3,5 mil linhas, seria tecnologia sem justificativa.
 
